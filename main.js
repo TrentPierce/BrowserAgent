@@ -26,7 +26,7 @@ async function initializeApp() {
     const passwordSet = await authManager.isPasswordSet();
 
     if (!passwordSet) {
-        // First launch - prompt for password
+        // First launch - prompt for password setup
         const password = await promptForNewPassword();
         if (!password) {
             app.quit();
@@ -43,40 +43,32 @@ async function initializeApp() {
             return;
         }
     } else {
-        // Returning user - try auto-login first
-        let password = await authManager.getStoredPassword();
-        let result = null;
-
-        if (password) {
-            result = await authManager.verifyPassword(password);
-            // If verification fails (e.g. stored value was a hash from old version), clear and prompt
-            if (!result.success) {
-                password = null;
-            }
-        }
-
-        if (!password) {
-            password = await promptForPassword();
-            if (!password) {
-                app.quit();
-                return;
-            }
-            result = await authManager.verifyPassword(password);
-            if (!result.success) {
-                dialog.showErrorBox('Authentication Failed', 'Invalid password. Please try again.');
-                app.quit();
-                return;
-            }
-        }
-
-        // Initialize database with verified password
+        // Returning user - try auto-login with stored credentials
+        // Password is only required for sensitive operations (settings, history export)
         try {
-            await initializeDatabase(password);
+            const autoLoginResult = await authManager.autoLogin();
+            if (autoLoginResult.success) {
+                await initializeDatabase(autoLoginResult.derivedKey);
+                console.log('[Main] Auto-login successful');
+            } else {
+                // Fallback to password prompt if auto-login fails
+                const password = await promptForPassword();
+                if (!password) {
+                    app.quit();
+                    return;
+                }
+
+                const result = await authManager.verifyPassword(password);
+                if (!result.success) {
+                    dialog.showErrorBox('Authentication Failed', 'Invalid password. Please try again.');
+                    app.quit();
+                    return;
+                }
+                await initializeDatabase(password);
+            }
         } catch (error) {
             console.error('[Main] Database initialization failed:', error);
-            // If database fails with stored password, it might be corrupted or key mismatch
-            // In a real app, we might want to prompt again or reset, but for now we error.
-            dialog.showErrorBox('Database Error', 'Could not open secure database. Your password might have changed.');
+            dialog.showErrorBox('Database Error', 'Could not open secure database.');
             app.quit();
             return;
         }
@@ -106,8 +98,10 @@ async function promptForNewPassword() {
             closable: true,
             alwaysOnTop: true,
             webPreferences: {
-                nodeIntegration: true,
-                contextIsolation: false
+                preload: path.join(__dirname, 'preload.js'),
+                contextIsolation: true,
+                nodeIntegration: false,
+                sandbox: true
             },
             show: false
         });
@@ -161,8 +155,10 @@ async function promptForPassword() {
             closable: true,
             alwaysOnTop: true,
             webPreferences: {
-                nodeIntegration: true,
-                contextIsolation: false
+                preload: path.join(__dirname, 'preload.js'),
+                contextIsolation: true,
+                nodeIntegration: false,
+                sandbox: true
             },
             show: false
         });
@@ -211,8 +207,10 @@ function createWindow() {
         height: 900,
         backgroundColor: '#1e1e2e',
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: false, // Required for webview tag
             webviewTag: true
         }
     });
@@ -295,11 +293,13 @@ ipcMain.on('stop-agent', (event) => {
 
 // --- Chat IPC Handlers ---
 
-ipcMain.on('chat-user-message', (event, message) => {
-    console.log(`[Main] Chat message from user: ${message}`);
+ipcMain.on('chat-user-message', (event, data) => {
+    // data is { message: string, tabId: string }
+    const messageText = typeof data === 'string' ? data : (data.message || '');
+    console.log(`[Main] Chat message from user: ${messageText}`);
 
-    if (activeAgent) {
-        activeAgent.handleUserResponse(message);
+    if (activeAgent && messageText) {
+        activeAgent.handleUserResponse(messageText);
     }
 });
 
@@ -349,6 +349,17 @@ ipcMain.on('cleanup-old-data', () => {
     if (database) {
         const cleaned = database.cleanupOldData(90);
         console.log(`[Main] Cleaned up ${cleaned} old sessions`);
+    }
+});
+
+ipcMain.on('clear-all-data', () => {
+    if (database) {
+        // Clear all user data for privacy
+        database.db.exec('DELETE FROM chat_messages');
+        database.db.exec('DELETE FROM interactions');
+        database.db.exec('DELETE FROM sessions');
+        database.compactDatabase();
+        console.log('[Main] All user data cleared');
     }
 });
 

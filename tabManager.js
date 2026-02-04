@@ -67,9 +67,14 @@ class TabManager {
         webview.className = 'browser-webview';
         webview.src = url;
         webview.setAttribute('allowpopups', 'true');
+        // Initial state: hidden via z-index, but technically "visible" for layout
+        webview.style.position = 'absolute';
+        webview.style.top = '0';
+        webview.style.left = '0';
         webview.style.width = '100%';
         webview.style.height = '100%';
-        webview.style.display = 'none';
+        webview.style.visibility = 'hidden';
+        webview.style.zIndex = '-1';
 
         // Create tab element
         const tab = document.createElement('div');
@@ -165,7 +170,8 @@ class TabManager {
             if (currentTab) {
                 currentTab.isActive = false;
                 currentTab.tabElement.classList.remove('active');
-                currentTab.webview.style.display = 'none';
+                currentTab.webview.style.visibility = 'hidden';
+                currentTab.webview.style.zIndex = '-1';
             }
         }
 
@@ -174,7 +180,8 @@ class TabManager {
         if (newTab) {
             newTab.isActive = true;
             newTab.tabElement.classList.add('active');
-            newTab.webview.style.display = 'block';
+            newTab.webview.style.visibility = 'visible';
+            newTab.webview.style.zIndex = '1';
             this.activeTabId = tabId;
             this.updateUrlBar(newTab.url);
 

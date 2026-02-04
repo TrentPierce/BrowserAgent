@@ -91,7 +91,7 @@ class EnhancedAgent extends Agent {
             // Wait for page if loading
             if (this.guestWebContents.isLoading()) {
                 this.log("Waiting for page load...");
-                await this.sleep(2000);
+                await this.waitForPageLoad();
             }
 
             this.log("📸 Capturing state...");
@@ -100,7 +100,7 @@ class EnhancedAgent extends Agent {
             // Capture state
             const simplifiedDOM = await this.getSimplifiedDOM();
             const screenshot = await this.guestWebContents.capturePage();
-            const base64Image = screenshot.toJPEG(80).toString('base64');
+            const base64Image = screenshot.toJPEG(70).toString('base64');
             const currentUrl = this.guestWebContents.getURL();
 
             // Update context
@@ -240,66 +240,39 @@ class EnhancedAgent extends Agent {
         this.apiCalls++;
         this.sendStats();
 
-        // Build enhanced prompt with context
+        // Build compact context summary (not full history)
         let contextStr = '';
         if (context.recentActions && context.recentActions.length > 0) {
-            contextStr = '\nRecent actions taken:\n';
-            context.recentActions.forEach((action, idx) => {
-                const status = action.success === true ? '✓' : action.success === false ? '✗' : '?';
-                contextStr += `${idx + 1}. ${status} ${action.type}\n`;
-            });
+            const actionSummary = context.recentActions.slice(-5).map((a, idx) => {
+                const status = a.success === true ? '✓' : a.success === false ? '✗' : '?';
+                return `${status}${a.type}`;
+            }).join(', ');
+            contextStr = `\nRecent: ${actionSummary}`;
         }
 
-        // Add learned recommendations
-        const recommendations = this.learningEngine.getRecommendations();
+        // Add learned recommendations (limit to 2)
+        const recommendations = this.learningEngine.getRecommendations().slice(0, 2);
         if (recommendations.length > 0) {
-            contextStr += '\nLearned insights for this site:\n';
-            recommendations.forEach(rec => {
-                contextStr += `- ${rec.message}\n`;
-            });
+            contextStr += '\nTips: ' + recommendations.map(r => r.message).join('; ');
         }
 
-        // Add progress info
-        const progress = this.contextManager.getProgress();
-        if (progress) {
-            contextStr += `\nProgress: ${progress.successfulActions}/${progress.totalActions} actions successful\n`;
-        }
+        // Compact prompt format
+        this.lastPrompt = `You are a browser automation agent.
 
-        this.lastPrompt = `
-You are an intelligent browser automation agent.
-User Goal: "${goal}"
-
-Current URL: ${context.currentUrl || 'unknown'}
-Domain: ${context.domain || 'unknown'}
-
-Here is the simplified HTML of interactive elements on the screen:
-${dom}
-
+Goal: "${goal}"
+URL: ${context.currentUrl || 'unknown'}
 ${contextStr}
 
-Analyze the screenshot and the HTML.
-Decide the single next best action to achieve the goal.
+Elements (id=data-agent-id):
+${dom}
 
-Supported actions:
-- "click": Click an element. Requires "selector".
-- "type": Type text into an input. Requires "selector" and "text".
-- "scroll": Scroll down or up.
-- "navigate": Go to a URL. Requires "url".
-- "done": Goal is achieved.
-- "wait": Wait for page to load or update.
-- "ask": Ask user for clarification (use when uncertain).
+Rules:
+1. For sites like "reddit", use "navigate" directly to https://www.reddit.com
+2. For "click", selector must be: [data-agent-id='ID']
+3. For "ask", include a question for the user
+4. If stuck, use "scroll" or "ask"
 
-Return ONLY a JSON object. No markdown formatting.
-Schema:
-{
-    "action": "click" | "type" | "scroll" | "done" | "navigate" | "wait" | "ask",
-    "selector": "[data-agent-id='...']",
-    "text": "text to type if typing",
-    "url": "full url if navigating",
-    "question": "question to ask user if action is 'ask'",
-    "reason": "short explanation of why this action helps achieve the goal"
-}
-`;
+Choose ONE action to achieve the goal.`;
 
         const imagePart = {
             inlineData: {
@@ -318,14 +291,78 @@ Schema:
                 this.sendStats();
             }
 
-            const text = response.text();
-            const cleanJSON = text.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
+            let text = response.text();
+            console.log('[EnhancedAgent] Raw response:', text.substring(0, 150));
 
-            this.log(`🤖 Plan: ${cleanJSON}`);
-            return JSON.parse(cleanJSON);
+            // Clean up response - extract JSON if wrapped in markdown
+            text = text.trim();
+            if (text.startsWith('```json')) text = text.slice(7);
+            else if (text.startsWith('```')) text = text.slice(3);
+            if (text.endsWith('```')) text = text.slice(0, -3);
+            text = text.trim();
+
+            // Try to find JSON object in response
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                text = jsonMatch[0];
+            }
+
+            // Try JSON parse first
+            try {
+                const parsed = JSON.parse(text);
+                this.log(`🤖 Plan: ${JSON.stringify(parsed)}`);
+                return parsed;
+            } catch (jsonError) {
+                // Fallback: Parse natural language response
+                this.log('⚠️ JSON parse failed, trying fallback. Text: ' + text.substring(0, 80));
+                const cleanText = text.replace(/^["']|["']$/g, '').trim();
+
+                // Check for navigate command
+                const navigateMatch = cleanText.match(/(?:navigate|go)(?:\s+to)?\s+["']?(https?:\/\/[^\s"']+)["']?/i);
+                if (navigateMatch) {
+                    this.log('✅ Navigate: ' + navigateMatch[1]);
+                    return { action: "navigate", url: navigateMatch[1], reason: "Parsed from text" };
+                }
+
+                // Check for ANY URL in text
+                const urlMatch = text.match(/(https?:\/\/[^\s"'<>]+)/i);
+                if (urlMatch) {
+                    this.log('✅ URL found: ' + urlMatch[1]);
+                    return { action: "navigate", url: urlMatch[1], reason: "URL extracted" };
+                }
+
+                // Check for click command
+                const clickMatch = cleanText.match(/click\s+(?:on\s+)?(?:element\s+)?(?:id\s+)?(?:\[?data-agent-id=['"]?)?(\d+)/i);
+                if (clickMatch) {
+                    this.log('✅ Click: element ' + clickMatch[1]);
+                    return { action: "click", selector: `[data-agent-id='${clickMatch[1]}']`, reason: "Parsed from text" };
+                }
+
+                // Check for type command
+                const typeMatch = cleanText.match(/type\s+["']?([^"']+?)["']?\s*(?:in(?:to)?|on)?\s*(?:element\s*)?(?:\[?data-agent-id=['"]?)?(\d+)?/i);
+                if (typeMatch && typeMatch[1]) {
+                    const textToType = typeMatch[1].trim();
+                    const elementId = typeMatch[2] || '1';
+                    this.log('✅ Type: "' + textToType + '" into ' + elementId);
+                    return { action: "type", text: textToType, selector: `[data-agent-id='${elementId}']`, reason: "Parsed from text" };
+                }
+
+                // Check for scroll
+                if (/scroll\s*down/i.test(cleanText)) {
+                    return { action: "scroll", reason: "Parsed from text" };
+                }
+
+                // Check for done
+                if (/done|goal achieved|finished/i.test(cleanText)) {
+                    return { action: "done", reason: "Parsed from text" };
+                }
+
+                this.log("❌ All parsing failed: " + jsonError.message);
+                return { action: "wait", reason: "Parse error: " + text.substring(0, 40) };
+            }
         } catch (e) {
-            this.log("Failed to parse Gemini JSON: " + e.message);
-            return { action: "wait", reason: "JSON parse error, waiting for stability" };
+            this.log("Failed to call Gemini API: " + e.message);
+            return { action: "wait", reason: "API error" };
         }
     }
 

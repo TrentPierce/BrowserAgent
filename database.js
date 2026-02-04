@@ -3,11 +3,38 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
+const SALT_FILE = path.join(__dirname, '.salt');
+
 class SecureDatabase {
     constructor(dbPath = null) {
         this.dbPath = dbPath || path.join(__dirname, 'agent_memory.db');
         this.db = null;
         this.encryptionKey = null;
+    }
+
+    /**
+     * Get the shared salt from the salt file
+     */
+    getSalt() {
+        try {
+            if (fs.existsSync(SALT_FILE)) {
+                const salt = fs.readFileSync(SALT_FILE);
+                if (salt.length === 32) {
+                    return salt;
+                }
+            }
+        } catch (error) {
+            console.error('[Database] Error reading salt file:', error.message);
+        }
+
+        // Generate new random salt if doesn't exist
+        const salt = crypto.randomBytes(32);
+        try {
+            fs.writeFileSync(SALT_FILE, salt, { mode: 0o600 });
+        } catch (error) {
+            console.error('[Database] Error saving salt:', error.message);
+        }
+        return salt;
     }
 
     initialize(encryptionKey) {
@@ -16,20 +43,15 @@ class SecureDatabase {
         }
 
         this.encryptionKey = this.deriveKey(encryptionKey);
-        
+
         try {
-            // Open database with encryption
+            // Open database (better-sqlite3 doesn't support SQLCipher natively)
+            // We implement application-level encryption for sensitive fields
             this.db = new Database(this.dbPath);
-            
-            // Enable encryption using SQLCipher
-            this.db.pragma(`key = "x'${this.encryptionKey}'"`);
-            
-            // Verify encryption is working
-            this.db.prepare('SELECT 1').get();
-            
+
             this.createTables();
             this.createIndexes();
-            
+
             console.log('[Database] Secure database initialized successfully');
             return true;
         } catch (error) {
@@ -39,8 +61,62 @@ class SecureDatabase {
     }
 
     deriveKey(password) {
-        // Derive a 256-bit key from password using PBKDF2
-        return crypto.pbkdf2Sync(password, 'agentic-browser-salt', 100000, 32, 'sha256').toString('hex');
+        const salt = this.getSalt();
+        // Derive a 256-bit key from password using PBKDF2 with unique salt
+        return crypto.pbkdf2Sync(
+            password,
+            Buffer.concat([salt, Buffer.from('database')]),
+            100000,
+            32,
+            'sha256'
+        ).toString('hex');
+    }
+
+    /**
+     * Encrypt sensitive data before storing
+     */
+    encrypt(text) {
+        if (!text || !this.encryptionKey) return text;
+
+        const iv = crypto.randomBytes(16);
+        const key = Buffer.from(this.encryptionKey, 'hex');
+        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+
+        let encrypted = cipher.update(text, 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+
+        const authTag = cipher.getAuthTag();
+
+        // Return IV + AuthTag + Encrypted data
+        return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+    }
+
+    /**
+     * Decrypt sensitive data when reading
+     */
+    decrypt(encryptedText) {
+        if (!encryptedText || !this.encryptionKey) return encryptedText;
+
+        try {
+            const parts = encryptedText.split(':');
+            if (parts.length !== 3) return encryptedText; // Not encrypted
+
+            const iv = Buffer.from(parts[0], 'hex');
+            const authTag = Buffer.from(parts[1], 'hex');
+            const encrypted = parts[2];
+
+            const key = Buffer.from(this.encryptionKey, 'hex');
+            const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+            decipher.setAuthTag(authTag);
+
+            let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+            decrypted += decipher.final('utf8');
+
+            return decrypted;
+        } catch (error) {
+            // Return original if decryption fails (might be plain text)
+            return encryptedText;
+        }
     }
 
     createTables() {
@@ -161,11 +237,16 @@ class SecureDatabase {
             INSERT INTO sessions (session_uuid, goal, domain, status, start_time)
             VALUES (?, ?, ?, 'active', datetime('now'))
         `);
-        const result = stmt.run(uuid, goal, domain);
+        // Encrypt sensitive goal data
+        const result = stmt.run(uuid, this.encrypt(goal), domain);
         return { id: result.lastInsertRowid, uuid };
     }
 
     endSession(sessionId, status = 'completed') {
+        if (!this.db) {
+            console.warn('[Database] Cannot end session: database is closed');
+            return;
+        }
         const stmt = this.db.prepare(`
             UPDATE sessions 
             SET end_time = datetime('now'), status = ?
@@ -175,11 +256,19 @@ class SecureDatabase {
     }
 
     getSession(sessionId) {
-        return this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+        const session = this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId);
+        if (session && session.goal) {
+            session.goal = this.decrypt(session.goal);
+        }
+        return session;
     }
 
     getActiveSession() {
-        return this.db.prepare("SELECT * FROM sessions WHERE status = 'active' ORDER BY start_time DESC LIMIT 1").get();
+        const session = this.db.prepare("SELECT * FROM sessions WHERE status = 'active' ORDER BY start_time DESC LIMIT 1").get();
+        if (session && session.goal) {
+            session.goal = this.decrypt(session.goal);
+        }
+        return session;
     }
 
     // Interaction logging
@@ -191,7 +280,7 @@ class SecureDatabase {
              retry_count, execution_time_ms)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        
+
         const result = stmt.run(
             sessionId,
             actionType,
@@ -206,7 +295,7 @@ class SecureDatabase {
             details.retryCount || 0,
             details.executionTimeMs || null
         );
-        
+
         return result.lastInsertRowid;
     }
 
@@ -234,26 +323,33 @@ class SecureDatabase {
             INSERT INTO chat_messages (session_id, sender, message, message_type, context)
             VALUES (?, ?, ?, ?, ?)
         `);
-        return stmt.run(sessionId, sender, message, messageType, context ? JSON.stringify(context) : null).lastInsertRowid;
+        // Encrypt chat messages
+        return stmt.run(sessionId, sender, this.encrypt(message), messageType, context ? JSON.stringify(context) : null).lastInsertRowid;
     }
 
     getChatHistory(sessionId, limit = 50) {
-        return this.db.prepare(`
+        const messages = this.db.prepare(`
             SELECT * FROM chat_messages 
             WHERE session_id = ? 
             ORDER BY timestamp ASC 
             LIMIT ?
         `).all(sessionId, limit);
+
+        // Decrypt messages
+        return messages.map(msg => ({
+            ...msg,
+            message: this.decrypt(msg.message)
+        }));
     }
 
     searchChatHistory(sessionId, searchQuery, limit = 20) {
-        const stmt = this.db.prepare(`
-            SELECT * FROM chat_messages 
-            WHERE session_id = ? AND message LIKE ?
-            ORDER BY timestamp DESC 
-            LIMIT ?
-        `);
-        return stmt.all(sessionId, `%${searchQuery}%`, limit);
+        // Note: Search works on encrypted data, so we need to decrypt and filter
+        const allMessages = this.getChatHistory(sessionId, 1000);
+        const lowerQuery = searchQuery.toLowerCase();
+
+        return allMessages
+            .filter(msg => msg.message.toLowerCase().includes(lowerQuery))
+            .slice(0, limit);
     }
 
     // Pattern management
@@ -292,14 +388,14 @@ class SecureDatabase {
             WHERE domain = ? AND success_rate >= ?
         `;
         const params = [domain, minSuccessRate];
-        
+
         if (patternType) {
             query += ' AND pattern_type = ?';
             params.push(patternType);
         }
-        
+
         query += ' ORDER BY success_rate DESC, use_count DESC';
-        
+
         return this.db.prepare(query).all(...params);
     }
 
@@ -358,10 +454,10 @@ class SecureDatabase {
             VALUES (?, ?, ?, ?, ?)
         `);
         return stmt.run(
-            sessionId, 
-            domain, 
-            challengeType, 
-            description, 
+            sessionId,
+            domain,
+            challengeType,
+            description,
             JSON.stringify(attemptedSolutions)
         ).lastInsertRowid;
     }
@@ -413,7 +509,7 @@ class SecureDatabase {
     cleanupOldData(daysToKeep = 90) {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - daysToKeep);
-        
+
         // Archive old sessions (mark as archived)
         const stmt = this.db.prepare(`
             UPDATE sessions 
@@ -421,9 +517,21 @@ class SecureDatabase {
             WHERE start_time < ? AND status != 'active'
         `);
         const result = stmt.run(cutoff.toISOString());
-        
+
         console.log(`[Database] Cleaned up ${result.changes} old sessions`);
         return result.changes;
+    }
+
+    /**
+     * Purge sensitive data (DOM snapshots) from completed sessions
+     */
+    purgeSensitiveData(sessionId) {
+        const stmt = this.db.prepare(`
+            UPDATE interactions 
+            SET dom_state = NULL, gemini_prompt = NULL
+            WHERE session_id = ?
+        `);
+        stmt.run(sessionId);
     }
 
     compactDatabase() {

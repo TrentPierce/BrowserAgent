@@ -1,19 +1,53 @@
 const keytar = require('keytar');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const SERVICE_NAME = 'agentic-browser';
 const ACCOUNT_NAME = 'database-encryption';
+const SALT_FILE = path.join(__dirname, '.salt');
 
 class AuthManager {
     constructor() {
         this.isAuthenticated = false;
         this.derivedKey = null;
+        this.salt = null;
+    }
+
+    /**
+     * Get or generate the salt for key derivation
+     * Each installation gets a unique random salt
+     */
+    getSalt() {
+        if (this.salt) return this.salt;
+
+        try {
+            if (fs.existsSync(SALT_FILE)) {
+                this.salt = fs.readFileSync(SALT_FILE);
+                if (this.salt.length === 32) {
+                    return this.salt;
+                }
+            }
+        } catch (error) {
+            console.error('[Auth] Error reading salt file:', error.message);
+        }
+
+        // Generate new random salt
+        this.salt = crypto.randomBytes(32);
+        try {
+            fs.writeFileSync(SALT_FILE, this.salt, { mode: 0o600 });
+            console.log('[Auth] Generated new unique salt');
+        } catch (error) {
+            console.error('[Auth] Error saving salt:', error.message);
+        }
+
+        return this.salt;
     }
 
     async isPasswordSet() {
         try {
-            const password = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
-            return password !== null;
+            const passwordHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+            return passwordHash !== null;
         } catch (error) {
             console.error('[Auth] Error checking password:', error.message);
             return false;
@@ -27,8 +61,11 @@ class AuthManager {
         }
 
         try {
-            // Store in system keychain
-            await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, password);
+            // Hash the password for storage (separate from encryption key)
+            const passwordHash = this.hashPassword(password);
+
+            // Store hash in system keychain (NOT the plain password)
+            await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, passwordHash);
 
             this.derivedKey = this.deriveKey(password);
             this.isAuthenticated = true;
@@ -41,31 +78,94 @@ class AuthManager {
         }
     }
 
-    async getStoredPassword() {
+    /**
+     * Auto-login using stored credentials (no password prompt needed)
+     * The derived key is regenerated from saved state
+     */
+    async autoLogin() {
         try {
-            return await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+            const storedHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+            if (!storedHash) {
+                return { success: false, error: 'No credentials stored' };
+            }
+
+            // Use the stored hash itself as input to derive the encryption key
+            // This allows auto-login without storing the actual password
+            const salt = this.getSalt();
+            this.derivedKey = crypto.pbkdf2Sync(
+                storedHash, // Use the hash as the "password" for key derivation
+                Buffer.concat([salt, Buffer.from('auto-encryption')]),
+                100000,
+                32,
+                'sha256'
+            ).toString('hex');
+
+            this.isAuthenticated = true;
+            console.log('[Auth] Auto-login successful');
+            return { success: true, derivedKey: this.derivedKey };
         } catch (error) {
-            console.error('[Auth] Error getting stored password:', error.message);
-            return null;
+            console.error('[Auth] Auto-login failed:', error.message);
+            return { success: false, error: error.message };
         }
+    }
+
+    /**
+     * Hash password for secure storage verification
+     */
+    hashPassword(password) {
+        const salt = this.getSalt();
+        return crypto.pbkdf2Sync(
+            password,
+            Buffer.concat([salt, Buffer.from('verification')]),
+            100000,
+            64,
+            'sha512'
+        ).toString('hex');
     }
 
     async verifyPassword(password) {
         try {
-            const storedPassword = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+            const storedHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
 
-            if (!storedPassword) {
+            if (!storedHash) {
                 return { success: false, error: 'No password set' };
             }
 
-            if (password === storedPassword) {
-                this.derivedKey = this.deriveKey(password);
-                this.isAuthenticated = true;
-                console.log('[Auth] Password verified successfully');
-                return { success: true, derivedKey: this.derivedKey };
+            // Hash the provided password and compare
+            const inputHash = this.hashPassword(password);
+
+            // Check if stored value is a valid 128-char hex hash (64 bytes as hex)
+            const isHashFormat = storedHash.length === 128 && /^[a-f0-9]+$/i.test(storedHash);
+
+            if (isHashFormat) {
+                // New hash format - use timing-safe comparison
+                try {
+                    const inputBuffer = Buffer.from(inputHash, 'hex');
+                    const storedBuffer = Buffer.from(storedHash, 'hex');
+
+                    if (inputBuffer.length === storedBuffer.length &&
+                        crypto.timingSafeEqual(inputBuffer, storedBuffer)) {
+                        this.derivedKey = this.deriveKey(password);
+                        this.isAuthenticated = true;
+                        console.log('[Auth] Password verified successfully');
+                        return { success: true, derivedKey: this.derivedKey };
+                    }
+                } catch (e) {
+                    // Fall through to simple comparison
+                }
             } else {
-                return { success: false, error: 'Invalid password' };
+                // Old plaintext format - check and migrate
+                if (password === storedHash) {
+                    console.log('[Auth] Migrating from plaintext to hashed password');
+                    // Upgrade to hashed format
+                    await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, inputHash);
+                    this.derivedKey = this.deriveKey(password);
+                    this.isAuthenticated = true;
+                    return { success: true, derivedKey: this.derivedKey };
+                }
             }
+
+            return { success: false, error: 'Invalid password' };
         } catch (error) {
             console.error('[Auth] Error verifying password:', error.message);
             return { success: false, error: error.message };
@@ -80,13 +180,14 @@ class AuthManager {
     }
 
     deriveKey(password) {
+        const salt = this.getSalt();
         // Use PBKDF2 to derive a strong encryption key
         return crypto.pbkdf2Sync(
             password,
-            'agentic-browser-salt-v1',  // Salt
-            100000,                      // Iterations
-            32,                          // Key length (256 bits)
-            'sha256'                     // Hash algorithm
+            Buffer.concat([salt, Buffer.from('encryption')]),
+            100000,
+            32,
+            'sha256'
         ).toString('hex');
     }
 
@@ -100,8 +201,13 @@ class AuthManager {
     async resetPassword() {
         try {
             await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
+            // Also remove salt to start fresh
+            if (fs.existsSync(SALT_FILE)) {
+                fs.unlinkSync(SALT_FILE);
+            }
             this.isAuthenticated = false;
             this.derivedKey = null;
+            this.salt = null;
             console.log('[Auth] Password reset');
             return { success: true };
         } catch (error) {

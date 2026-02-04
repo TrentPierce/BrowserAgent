@@ -149,6 +149,29 @@
             padding: 10px;
             margin-bottom: 20px;
             font-size: 0.85rem;
+            position: relative;
+        }
+
+        #stats-container.loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-color), var(--secondary-accent), var(--accent-color));
+            background-size: 200% 100%;
+            animation: loading-bar 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loading-bar {
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
         }
 
         .stat-item {
@@ -430,19 +453,23 @@
         }
 
         /* Webview Container */
+        /* Webview Container */
         .webview-container {
             flex: 1;
             position: relative;
             background: #fff;
             min-height: 0;
             overflow: hidden;
+            /* Ensure content stays within bounds */
         }
 
         .browser-webview {
-            width: 100%;
-            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 100% !important;
             border: none;
-            display: block;
         }
 
         /* Question Dialog Overlay */
@@ -576,13 +603,14 @@
         </div>
 
         <div class="control-group">
-            <label for="goal-input">User Goal</label>
-            <textarea id="goal-input" placeholder="e.g. Go to Google and search for 'Electron JS'"></textarea>
+            <label for="goal-input">🎯 Main Goal</label>
+            <textarea id="goal-input"
+                placeholder="State your objective (e.g. 'Go to Reddit and create an account'). Press Ctrl+Enter to start."></textarea>
         </div>
 
         <div class="button-group">
-            <button id="btn-start">Start Agent</button>
-            <button id="btn-stop" disabled>Stop</button>
+            <button id="btn-start" title="Ctrl+Enter to start">Start Agent</button>
+            <button id="btn-stop" disabled title="Escape to stop">Stop</button>
         </div>
 
         <div style="height: 15px;"></div>
@@ -617,7 +645,7 @@
             </div>
 
             <div class="chat-input-sidebar">
-                <input type="text" id="sidebar-chat-input" placeholder="Ask or command the agent...">
+                <input type="text" id="sidebar-chat-input" placeholder="💬 Chat with agent while running...">
                 <button id="btn-sidebar-send">➤</button>
             </div>
         </div>
@@ -650,7 +678,8 @@
 
     <script src="tabManager.js"></script>
     <script>
-        const { ipcRenderer } = require('electron');
+        // Use electronAPI from preload script for security
+        const api = window.electronAPI;
 
         // Initialize Tab Manager
         const tabManager = new TabManager();
@@ -702,9 +731,20 @@
             tabManager.navigateTo(urlInput.value);
         };
 
-        btnGo.addEventListener('click', navigate);
         urlInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') navigate();
+        });
+
+        btnGo.addEventListener('click', navigate);
+        goalInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!btnStart.disabled) {
+                    btnStart.click();
+                } else {
+                    addLog('⚠️ Agent is already running.', null, 'system');
+                }
+            }
         });
 
         // --- Agent Logic ---
@@ -744,21 +784,18 @@
             btnStart.disabled = true;
             btnStop.disabled = false;
             goalInput.disabled = true;
+            document.getElementById('stats-container').classList.add('loading');
 
             addLog(`🚀 Starting agent on ${activeTab.id} with goal: "${goal}"`, activeTab.id, 'system');
 
             // Send start signal to Main process
-            ipcRenderer.send('start-agent', {
-                goal,
-                tabId: activeTab.id,
-                webContentsId: activeTab.webview.getWebContentsId()
-            });
+            api.startAgent(goal, activeTab.webview.getWebContentsId());
         });
 
         btnStop.addEventListener('click', () => {
             const activeTab = tabManager.getActiveTab();
             if (activeTab) {
-                ipcRenderer.send('stop-agent', activeTab.id);
+                api.stopAgent();
                 addLog('🛑 Stopping agent...', activeTab.id, 'system');
             }
         });
@@ -782,7 +819,7 @@
             } else {
                 // Agent is running, send message as response/guidance
                 addLog(message, activeTab.id, 'user');
-                ipcRenderer.send('chat-user-message', { message: message, tabId: activeTab.id });
+                api.sendChatMessage(message, activeTab.id);
             }
 
             sidebarChatInput.value = '';
@@ -799,12 +836,12 @@
             btnToggleLogs.textContent = logsDiv.classList.contains('compact') ? 'Expanded' : 'Compact';
         });
 
-        ipcRenderer.on('agent-log', (event, message, tabId) => {
-            addLog(message, tabId, 'agent');
+        api.onAgentLog((message) => {
+            addLog(message, null, 'agent');
         });
 
         // Listen for stats
-        ipcRenderer.on('agent-stats', (event, stats, tabId) => {
+        api.onAgentStats((stats) => {
             document.getElementById('stat-time').textContent = stats.time;
             document.getElementById('stat-api').textContent = stats.apiCalls;
             document.getElementById('stat-tokens').textContent = stats.tokens;
@@ -813,33 +850,29 @@
                 const successRate = Math.round((stats.successRate || 0) * 100);
                 document.getElementById('stat-success').textContent = successRate + '%';
             }
-
-            // Learning indicator can be added back if needed in the UI
         });
 
-        ipcRenderer.on('agent-stopped', (event, tabId) => {
-            const activeTab = tabManager.getActiveTab();
-            if (!activeTab || activeTab.id === tabId) {
-                btnStart.disabled = false;
-                btnStop.disabled = true;
-                goalInput.disabled = false;
-            }
-            addLog('✅ Agent stopped.', tabId, 'system');
+        api.onAgentStopped(() => {
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+            goalInput.disabled = false;
+            document.getElementById('stats-container').classList.remove('loading');
+            addLog('✅ Agent stopped.', null, 'system');
         });
 
         // Handle agent questions
-        ipcRenderer.on('agent-question', (event, questionData, tabId) => {
+        api.onAgentQuestion((questionData) => {
             const activeTab = tabManager.getActiveTab();
-            if (activeTab && activeTab.id === tabId) {
-                showQuestionDialog(questionData, tabId);
+            if (activeTab) {
+                showQuestionDialog(questionData, activeTab.id);
             }
         });
 
         // Handle chat messages
-        ipcRenderer.on('chat-message', (event, messageData, tabId) => {
+        api.onChatMessage((messageData) => {
             const activeTab = tabManager.getActiveTab();
-            if (activeTab && activeTab.id === tabId) {
-                addLog(messageData.message, tabId, messageData.sender === 'user' ? 'user' : 'agent');
+            if (activeTab) {
+                addLog(messageData.message, activeTab.id, messageData.sender === 'user' ? 'user' : 'agent');
             }
         });
 
@@ -889,7 +922,7 @@
 
         function sendQuestionResponse(response, tabId) {
             hideQuestionDialog();
-            ipcRenderer.send('chat-user-message', { message: response, tabId });
+            api.sendChatMessage(response, tabId);
             addLog(response, tabId, 'user');
         }
 
@@ -909,9 +942,32 @@
             }
         });
 
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && questionOverlay.classList.contains('active')) {
-                hideQuestionDialog();
+            // Escape - close dialog or stop agent
+            if (e.key === 'Escape') {
+                if (questionOverlay.classList.contains('active')) {
+                    hideQuestionDialog();
+                } else if (!btnStop.disabled) {
+                    btnStop.click();
+                }
+            }
+            // Ctrl+Enter - start agent
+            if (e.ctrlKey && e.key === 'Enter' && !btnStart.disabled) {
+                btnStart.click();
+            }
+            // Ctrl+T - new tab
+            if (e.ctrlKey && e.key === 't') {
+                e.preventDefault();
+                tabManager.createTab();
+            }
+            // Ctrl+W - close current tab
+            if (e.ctrlKey && e.key === 'w') {
+                e.preventDefault();
+                const activeTab = tabManager.getActiveTab();
+                if (activeTab && tabManager.tabs.size > 1) {
+                    tabManager.closeTab(activeTab.id);
+                }
             }
         });
 
@@ -919,7 +975,7 @@
         setInterval(async () => {
             const activeTab = tabManager.getActiveTab();
             if (activeTab) {
-                const stats = await ipcRenderer.invoke('get-session-stats', activeTab.id);
+                const stats = await api.getSessionStats();
                 if (stats) {
                     const successRate = Math.round((stats.successRate || 0) * 100);
                     document.getElementById('stat-success').textContent = successRate + '%';
