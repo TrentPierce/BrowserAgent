@@ -1,4 +1,4 @@
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
 class ContextManager {
     constructor(database) {
@@ -14,7 +14,7 @@ class ContextManager {
         // Extract domain from URL
         const domain = initialUrl ? this.extractDomain(initialUrl) : null;
         this.currentDomain = domain;
-        
+
         // Create session in database
         const session = this.db.createSession(goal, domain);
         this.currentSession = {
@@ -43,7 +43,7 @@ class ContextManager {
 
         // Update session in database
         this.db.endSession(this.currentSession.id, status);
-        
+
         // Save URL history
         const stmt = this.db.db.prepare(`
             UPDATE sessions SET url_history = ? WHERE id = ?
@@ -51,7 +51,7 @@ class ContextManager {
         stmt.run(JSON.stringify(this.urlHistory), this.currentSession.id);
 
         console.log(`[ContextManager] Session ended: ${this.currentSession.uuid} with status: ${status}`);
-        
+
         // Clear current session
         const endedSession = { ...this.currentSession };
         this.currentSession = null;
@@ -59,7 +59,7 @@ class ContextManager {
         this.urlHistory = [];
         this.actionHistory = [];
         this.domHistory = [];
-        
+
         return endedSession;
     }
 
@@ -104,7 +104,7 @@ class ContextManager {
 
     updateActionResult(interactionId, success, feedback = null) {
         this.db.updateInteractionSuccess(interactionId, success, feedback);
-        
+
         // Update in-memory history
         const action = this.actionHistory.find(a => a.id === interactionId);
         if (action) {
@@ -116,7 +116,7 @@ class ContextManager {
     recordNavigation(url) {
         this.urlHistory.push(url);
         this.currentDomain = this.extractDomain(url);
-        
+
         // Update session domain if changed
         if (this.currentSession && this.currentDomain !== this.currentSession.domain) {
             const stmt = this.db.db.prepare(`
@@ -154,6 +154,10 @@ class ContextManager {
     getSessionHistory(limit = 50) {
         if (!this.currentSession) return [];
         return this.db.getSessionInteractions(this.currentSession.id, limit);
+    }
+
+    getSessionStats(sessionId) {
+        return this.db.getSessionStats(sessionId);
     }
 
     // Chat message management
@@ -195,7 +199,7 @@ class ContextManager {
     // Challenge tracking
     recordChallenge(challengeType, description, attemptedSolutions = []) {
         if (!this.currentSession) return null;
-        
+
         return this.db.recordChallenge(
             this.currentSession.id,
             this.currentDomain,
@@ -224,7 +228,7 @@ class ContextManager {
     getSuccessRate() {
         const total = this.actionHistory.length;
         if (total === 0) return 1.0;
-        
+
         const successful = this.actionHistory.filter(a => a.success === true).length;
         return successful / total;
     }
@@ -232,10 +236,10 @@ class ContextManager {
     detectLoop(threshold = 3) {
         // Detect if we're stuck in a loop by checking recent actions
         if (this.actionHistory.length < threshold) return false;
-        
+
         const recent = this.actionHistory.slice(-threshold);
         const actionSignatures = recent.map(a => `${a.type}-${JSON.stringify(a.details)}`);
-        
+
         // Check if the same action is repeated
         const uniqueActions = [...new Set(actionSignatures)];
         return uniqueActions.length === 1;
@@ -243,11 +247,11 @@ class ContextManager {
 
     getProgress() {
         if (!this.currentSession) return null;
-        
+
         const totalActions = this.actionHistory.length;
         const successfulActions = this.actionHistory.filter(a => a.success === true).length;
         const failedActions = this.actionHistory.filter(a => a.success === false).length;
-        
+
         return {
             totalActions,
             successfulActions,
@@ -279,7 +283,7 @@ class ContextManager {
     // Export session data
     exportSession() {
         if (!this.currentSession) return null;
-        
+
         return {
             session: this.currentSession,
             urlHistory: this.urlHistory,
@@ -306,9 +310,9 @@ class ContextManager {
             actions: [],
             chatMessages: []
         };
-        
+
         this.currentDomain = session.domain;
-        
+
         if (session.url_history) {
             try {
                 this.urlHistory = JSON.parse(session.url_history);

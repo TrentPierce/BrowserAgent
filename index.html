@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agentic Browser - Powered by Gemini</title>
+    <title>Agentic Browser - Multi-Tab</title>
     <style>
         :root {
             --bg-color: #1e1e2e;
@@ -14,6 +14,10 @@
             --secondary-accent: #f38ba8;
             --input-bg: #313244;
             --border-color: #45475a;
+            --success-color: #a6e3a1;
+            --warning-color: #f9e2af;
+            --tab-active-bg: #1e1e2e;
+            --tab-inactive-bg: #181825;
         }
 
         body {
@@ -30,12 +34,14 @@
         /* Left Panel - Command Center */
         #sidebar {
             width: 30%;
+            min-width: 350px;
             background-color: var(--sidebar-bg);
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             padding: 20px;
             box-sizing: border-box;
+            z-index: 100;
         }
 
         h1 {
@@ -133,6 +139,15 @@
             font-family: 'Fira Code', monospace;
         }
 
+        .learning-indicator {
+            background: var(--success-color);
+            color: #1e1e2e;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
         #logs-container {
             flex-grow: 1;
             display: flex;
@@ -140,16 +155,29 @@
             gap: 5px;
             margin-top: 10px;
             min-height: 0;
-            /* Important for nested flex scroll */
         }
 
         #logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 1px;
             color: #6c7086;
             margin-bottom: 5px;
             flex-shrink: 0;
+        }
+
+        .logs-toggle {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border-radius: 4px;
+            flex: none;
         }
 
         #logs {
@@ -182,6 +210,7 @@
             display: flex;
             flex-direction: column;
             background-color: #fff;
+            position: relative;
         }
 
         #nav-bar {
@@ -217,11 +246,251 @@
             cursor: pointer;
         }
 
-        #browser-view {
+        /* Tab Bar Styles */
+        .tab-bar {
+            display: flex;
+            background-color: var(--sidebar-bg);
+            border-bottom: 1px solid var(--border-color);
+            align-items: center;
+            padding: 0 5px;
+            height: 38px;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .tab-bar::-webkit-scrollbar {
+            height: 3px;
+        }
+
+        .tab-bar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .tab-bar::-webkit-scrollbar-thumb {
+            background: #45475a;
+            border-radius: 2px;
+        }
+
+        .tabs-container {
+            display: flex;
+            flex: 1;
+            gap: 2px;
+            overflow-x: auto;
+        }
+
+        .tab {
+            display: flex;
+            align-items: center;
+            min-width: 120px;
+            max-width: 200px;
+            height: 32px;
+            padding: 0 10px;
+            background: var(--tab-inactive-bg);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            user-select: none;
+            position: relative;
+        }
+
+        .tab:hover {
+            background: #313244;
+        }
+
+        .tab.active {
+            background: var(--tab-active-bg);
+            border-color: var(--accent-color);
+            border-bottom: 2px solid var(--accent-color);
+        }
+
+        .tab-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .tab-title {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tab-close {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            font-size: 16px;
+            line-height: 1;
+            opacity: 0.7;
+            transition: all 0.2s;
+        }
+
+        .tab-close:hover {
+            background: var(--secondary-accent);
+            opacity: 1;
+        }
+
+        .new-tab-btn {
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            flex: none;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 5px;
+        }
+
+        .new-tab-btn:hover {
+            background: var(--input-bg);
+            border-color: var(--accent-color);
+        }
+
+        /* Webview Container */
+        .webview-container {
             flex-grow: 1;
-            border: none;
+            position: relative;
+            background: #fff;
+        }
+
+        .browser-webview {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
+            border: none;
+        }
+
+        /* Question Dialog Overlay */
+        #question-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10001;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #question-overlay.active {
+            display: flex;
+        }
+
+        .question-dialog {
+            background: var(--sidebar-bg);
+            border: 2px solid var(--accent-color);
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 0 30px rgba(137, 180, 250, 0.3);
+        }
+
+        .question-dialog h3 {
+            color: var(--accent-color);
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+
+        .question-dialog p {
+            color: var(--text-color);
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .question-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .question-option {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 12px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            font-size: 0.95rem;
+        }
+
+        .question-option:hover {
+            background: var(--accent-color);
+            color: #111;
+            border-color: var(--accent-color);
+        }
+
+        .question-custom {
+            margin-top: 15px;
+        }
+
+        .question-custom input {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-family: inherit;
+        }
+
+        .question-custom input:focus {
+            outline: 2px solid var(--accent-color);
+        }
+
+        /* Scrollbar styling */
+        #logs::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #logs::-webkit-scrollbar-track {
+            background: #000;
+        }
+
+        #logs::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+
+        /* Compact mode for logs */
+        #logs.compact .log-entry {
+            display: inline;
+            margin-right: 10px;
+            border: none;
+        }
+
+        /* Tab info display */
+        .tab-info {
+            background: var(--input-bg);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 0.8rem;
+            color: #6c7086;
+        }
+
+        .tab-info strong {
+            color: var(--accent-color);
         }
     </style>
 </head>
@@ -231,6 +500,10 @@
     <!-- Left Panel -->
     <div id="sidebar">
         <h1>🤖 Agent Control</h1>
+
+        <div class="tab-info" id="active-tab-info">
+            Active Tab: <strong id="current-tab-id">None</strong>
+        </div>
 
         <div class="control-group">
             <label for="goal-input">User Goal</label>
@@ -257,12 +530,23 @@
                 <span>🪙 Tokens:</span>
                 <span id="stat-tokens" class="stat-value">0</span>
             </div>
+            <div class="stat-item">
+                <span>📊 Success Rate:</span>
+                <span id="stat-success" class="stat-value">-</span>
+            </div>
+            <div class="stat-item">
+                <span>🧠 Learning:</span>
+                <span id="stat-learning" class="learning-indicator" style="display: none;">ACTIVE</span>
+            </div>
         </div>
 
         <div id="logs-container">
-            <div id="logs-header">Activity Log</div>
+            <div id="logs-header">
+                <span>Activity Log</span>
+                <button class="logs-toggle" id="btn-toggle-logs">Compact</button>
+            </div>
             <div id="logs">
-                <div class="log-entry"><span class="log-timestamp">[System]</span> Ready to help.</div>
+                <div class="log-entry"><span class="log-timestamp">[System]</span> Multi-tab browser ready. Create tabs and start agents!</div>
             </div>
         </div>
     </div>
@@ -273,28 +557,46 @@
             <input type="text" id="url-input" value="https://www.google.com" placeholder="Enter URL">
             <button id="btn-go">Go</button>
         </div>
-        <!-- IMPORTANT: nodeintegration must be enabled in main process -->
-        <webview id="browser-view" src="https://www.google.com"></webview>
+        <!-- Tabs and webviews will be inserted here by TabManager -->
+        
+        <!-- Question Dialog Overlay -->
+        <div id="question-overlay">
+            <div class="question-dialog">
+                <h3>🤔 I Need Your Help</h3>
+                <p id="question-text">The agent has encountered an issue and needs guidance.</p>
+                <div class="question-options" id="question-options"></div>
+                <div class="question-custom">
+                    <input type="text" id="custom-answer" placeholder="Or type your own guidance here...">
+                    <button id="btn-custom-answer" style="width: 100%;">Send Custom Response</button>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <script src="chatOverlay.js"></script>
+    <script src="tabManager.js"></script>
     <script>
         const { ipcRenderer } = require('electron');
 
-        const webview = document.getElementById('browser-view');
+        // Initialize Tab Manager
+        const tabManager = new TabManager();
+        tabManager.init();
+
         const urlInput = document.getElementById('url-input');
         const btnGo = document.getElementById('btn-go');
         const btnStart = document.getElementById('btn-start');
         const btnStop = document.getElementById('btn-stop');
         const goalInput = document.getElementById('goal-input');
         const logsDiv = document.getElementById('logs');
+        const btnToggleLogs = document.getElementById('btn-toggle-logs');
+        const currentTabDisplay = document.getElementById('current-tab-id');
+
+        // Initialize chat overlay
+        let chatOverlay = null;
 
         // --- Navigation Logic ---
         const navigate = () => {
-            let url = urlInput.value;
-            if (!url.startsWith('http')) {
-                url = 'https://' + url;
-            }
-            webview.loadURL(url);
+            tabManager.navigateTo(urlInput.value);
         };
 
         btnGo.addEventListener('click', navigate);
@@ -302,24 +604,16 @@
             if (e.key === 'Enter') navigate();
         });
 
-        // Sync URL bar
-        webview.addEventListener('did-navigate', (e) => {
-            urlInput.value = e.url;
-        });
-        webview.addEventListener('did-navigate-in-page', (e) => {
-            urlInput.value = e.url;
-        });
-
         // --- Agent Logic ---
 
         // Log Helper
-        const addLog = (msg) => {
+        const addLog = (msg, tabId = null) => {
             const time = new Date().toLocaleTimeString();
             const div = document.createElement('div');
             div.className = 'log-entry';
-            div.innerHTML = `<span class="log-timestamp">[${time}]</span> ${msg}`;
+            const tabPrefix = tabId ? `[${tabId}] ` : '';
+            div.innerHTML = `<span class="log-timestamp">[${time}]</span> ${tabPrefix}${msg}`;
             logsDiv.appendChild(div);
-            // Ensure scroll happens after layout update
             requestAnimationFrame(() => {
                 logsDiv.scrollTop = logsDiv.scrollHeight;
             });
@@ -332,38 +626,184 @@
                 return;
             }
 
+            const activeTab = tabManager.getActiveTab();
+            if (!activeTab) {
+                addLog('⚠️ No active tab.');
+                return;
+            }
+
             btnStart.disabled = true;
             btnStop.disabled = false;
             goalInput.disabled = true;
-            addLog(`🚀 Starting agent with goal: "${goal}"`);
+            
+            addLog(`🚀 Starting agent on ${activeTab.id} with goal: "${goal}"`, activeTab.id);
+
+            // Initialize chat overlay if not already done
+            if (!chatOverlay) {
+                chatOverlay = new ChatOverlay();
+            }
 
             // Send start signal to Main process
-            ipcRenderer.send('start-agent', { goal, webContentsId: webview.getWebContentsId() });
+            ipcRenderer.send('start-agent', { 
+                goal, 
+                tabId: activeTab.id,
+                webContentsId: activeTab.webview.getWebContentsId() 
+            });
         });
 
         btnStop.addEventListener('click', () => {
-            ipcRenderer.send('stop-agent');
-            addLog('🛑 Stopping agent...');
+            const activeTab = tabManager.getActiveTab();
+            if (activeTab) {
+                ipcRenderer.send('stop-agent', activeTab.id);
+                addLog('🛑 Stopping agent...', activeTab.id);
+            }
+        });
+
+        // Toggle logs compact mode
+        btnToggleLogs.addEventListener('click', () => {
+            logsDiv.classList.toggle('compact');
+            btnToggleLogs.textContent = logsDiv.classList.contains('compact') ? 'Expanded' : 'Compact';
         });
 
         // Listen for logs/status from main process
-        ipcRenderer.on('agent-log', (event, message) => {
-            addLog(message);
+        ipcRenderer.on('agent-log', (event, message, tabId) => {
+            addLog(message, tabId);
         });
 
         // Listen for stats
-        ipcRenderer.on('agent-stats', (event, stats) => {
+        ipcRenderer.on('agent-stats', (event, stats, tabId) => {
             document.getElementById('stat-time').textContent = stats.time;
             document.getElementById('stat-api').textContent = stats.apiCalls;
             document.getElementById('stat-tokens').textContent = stats.tokens;
+            
+            if (stats.successRate !== undefined) {
+                const successRate = Math.round((stats.successRate || 0) * 100);
+                document.getElementById('stat-success').textContent = successRate + '%';
+            }
+            
+            if (stats.learning) {
+                document.getElementById('stat-learning').style.display = 'inline';
+            }
         });
 
-        ipcRenderer.on('agent-stopped', () => {
-            btnStart.disabled = false;
-            btnStop.disabled = true;
-            goalInput.disabled = false;
-            addLog('✅ Agent stopped.');
+        ipcRenderer.on('agent-stopped', (event, tabId) => {
+            const activeTab = tabManager.getActiveTab();
+            if (!activeTab || activeTab.id === tabId) {
+                btnStart.disabled = false;
+                btnStop.disabled = true;
+                goalInput.disabled = false;
+            }
+            addLog('✅ Agent stopped.', tabId);
         });
+
+        // Handle agent questions
+        ipcRenderer.on('agent-question', (event, questionData, tabId) => {
+            const activeTab = tabManager.getActiveTab();
+            if (activeTab && activeTab.id === tabId) {
+                showQuestionDialog(questionData, tabId);
+            }
+        });
+
+        // Handle chat messages
+        ipcRenderer.on('chat-message', (event, messageData, tabId) => {
+            const activeTab = tabManager.getActiveTab();
+            if (chatOverlay && activeTab && activeTab.id === tabId) {
+                chatOverlay.addMessage(messageData.sender, messageData.message, messageData.type);
+            }
+        });
+
+        // Handle tab switch
+        ipcRenderer.on('tab-switched', (event, tabId) => {
+            currentTabDisplay.textContent = tabId;
+            const tab = tabManager.tabs.get(tabId);
+            if (tab) {
+                urlInput.value = tab.url;
+            }
+        });
+
+        // --- Question Dialog Logic ---
+        const questionOverlay = document.getElementById('question-overlay');
+        const questionText = document.getElementById('question-text');
+        const questionOptions = document.getElementById('question-options');
+        const customAnswerInput = document.getElementById('custom-answer');
+        const btnCustomAnswer = document.getElementById('btn-custom-answer');
+        let currentQuestionTabId = null;
+
+        function showQuestionDialog(questionData, tabId) {
+            currentQuestionTabId = tabId;
+            questionText.textContent = questionData.question;
+            questionOptions.innerHTML = '';
+            
+            if (questionData.options && questionData.options.length > 0) {
+                questionData.options.forEach((option, index) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'question-option';
+                    btn.textContent = option;
+                    btn.addEventListener('click', () => {
+                        sendQuestionResponse(option, tabId);
+                    });
+                    questionOptions.appendChild(btn);
+                });
+            }
+            
+            questionOverlay.classList.add('active');
+            customAnswerInput.value = '';
+            customAnswerInput.focus();
+        }
+
+        function hideQuestionDialog() {
+            questionOverlay.classList.remove('active');
+            currentQuestionTabId = null;
+        }
+
+        function sendQuestionResponse(response, tabId) {
+            hideQuestionDialog();
+            ipcRenderer.send('chat-user-message', { message: response, tabId });
+            
+            if (chatOverlay) {
+                chatOverlay.addMessage('user', response);
+            }
+        }
+
+        btnCustomAnswer.addEventListener('click', () => {
+            const response = customAnswerInput.value.trim();
+            if (response && currentQuestionTabId) {
+                sendQuestionResponse(response, currentQuestionTabId);
+            }
+        });
+
+        customAnswerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const response = customAnswerInput.value.trim();
+                if (response && currentQuestionTabId) {
+                    sendQuestionResponse(response, currentQuestionTabId);
+                }
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && questionOverlay.classList.contains('active')) {
+                hideQuestionDialog();
+            }
+        });
+
+        // Request session stats periodically
+        setInterval(async () => {
+            const activeTab = tabManager.getActiveTab();
+            if (activeTab) {
+                const stats = await ipcRenderer.invoke('get-session-stats', activeTab.id);
+                if (stats) {
+                    const successRate = Math.round((stats.successRate || 0) * 100);
+                    document.getElementById('stat-success').textContent = successRate + '%';
+                }
+            }
+        }, 5000);
+
+        // Initial tab info update
+        const initialTab = tabManager.getActiveTab();
+        if (initialTab) {
+            currentTabDisplay.textContent = initialTab.id;
+        }
 
     </script>
 </body>

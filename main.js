@@ -1,10 +1,187 @@
 require('dotenv').config();
-const { app, BrowserWindow, ipcMain, webContents } = require('electron');
+const { app, BrowserWindow, ipcMain, webContents, dialog } = require('electron');
 const path = require('path');
-const Agent = require('./agent');
+
+// Import new components
+const SecureDatabase = require('./database');
+const AuthManager = require('./auth');
+const ContextManager = require('./contextManager');
+const LearningEngine = require('./learningEngine');
+const EnhancedAgent = require('./enhancedAgent');
 
 let mainWindow;
 let activeAgent = null;
+let database = null;
+let authManager = null;
+let contextManager = null;
+let learningEngine = null;
+let isAuthenticated = false;
+let isInitializing = true;
+
+async function initializeApp() {
+    // Initialize authentication
+    authManager = new AuthManager();
+
+    // Check if password is already set
+    const passwordSet = await authManager.isPasswordSet();
+
+    if (!passwordSet) {
+        // First launch - prompt for password
+        const password = await promptForNewPassword();
+        if (!password) {
+            app.quit();
+            return;
+        }
+
+        try {
+            await authManager.setPassword(password);
+            await initializeDatabase(password);
+        } catch (error) {
+            console.error('[Main] Failed to initialize:', error);
+            dialog.showErrorBox('Initialization Error', error.message);
+            app.quit();
+            return;
+        }
+    } else {
+        // Returning user - prompt for password
+        const password = await promptForPassword();
+        if (!password) {
+            app.quit();
+            return;
+        }
+
+        const result = await authManager.verifyPassword(password);
+        if (!result.success) {
+            dialog.showErrorBox('Authentication Failed', 'Invalid password. Please try again.');
+            app.quit();
+            return;
+        }
+
+        await initializeDatabase(password);
+    }
+
+    isAuthenticated = true;
+    isInitializing = false;
+    createWindow();
+}
+
+async function initializeDatabase(password) {
+    database = new SecureDatabase();
+    database.initialize(password);
+    contextManager = new ContextManager(database);
+    learningEngine = new LearningEngine(database, contextManager);
+    console.log('[Main] Database initialized successfully');
+}
+
+async function promptForNewPassword() {
+    return new Promise((resolve) => {
+        const inputWindow = new BrowserWindow({
+            width: 500,
+            height: 450,
+            resizable: false,
+            minimizable: false,
+            maximizable: false,
+            closable: true,
+            alwaysOnTop: true,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false
+            },
+            show: false
+        });
+
+        // Load the password setup HTML file
+        inputWindow.loadFile('password-setup.html');
+
+        // Show window once ready to avoid visual flash
+        inputWindow.once('ready-to-show', () => {
+            inputWindow.show();
+            inputWindow.focus();
+        });
+
+        // Handle window closed without response
+        inputWindow.on('closed', () => {
+            resolve(null);
+        });
+
+        // Set up IPC handlers for this specific window
+        const passwordSetHandler = (event, pwd) => {
+            if (event.sender === inputWindow.webContents) {
+                inputWindow.close();
+                ipcMain.removeListener('password-set', passwordSetHandler);
+                ipcMain.removeListener('password-cancel', passwordCancelHandler);
+                resolve(pwd);
+            }
+        };
+
+        const passwordCancelHandler = (event) => {
+            if (event.sender === inputWindow.webContents) {
+                inputWindow.close();
+                ipcMain.removeListener('password-set', passwordSetHandler);
+                ipcMain.removeListener('password-cancel', passwordCancelHandler);
+                resolve(null);
+            }
+        };
+
+        ipcMain.on('password-set', passwordSetHandler);
+        ipcMain.on('password-cancel', passwordCancelHandler);
+    });
+}
+
+async function promptForPassword() {
+    return new Promise((resolve) => {
+        const inputWindow = new BrowserWindow({
+            width: 500,
+            height: 380,
+            resizable: false,
+            minimizable: false,
+            maximizable: false,
+            closable: true,
+            alwaysOnTop: true,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false
+            },
+            show: false
+        });
+
+        // Load the password login HTML file
+        inputWindow.loadFile('password-login.html');
+
+        // Show window once ready
+        inputWindow.once('ready-to-show', () => {
+            inputWindow.show();
+            inputWindow.focus();
+        });
+
+        // Handle window closed without response
+        inputWindow.on('closed', () => {
+            resolve(null);
+        });
+
+        // Set up IPC handlers
+        const passwordEnteredHandler = (event, pwd) => {
+            if (event.sender === inputWindow.webContents) {
+                inputWindow.close();
+                ipcMain.removeListener('password-entered', passwordEnteredHandler);
+                ipcMain.removeListener('password-cancel', passwordCancelHandler);
+                resolve(pwd);
+            }
+        };
+
+        const passwordCancelHandler = (event) => {
+            if (event.sender === inputWindow.webContents) {
+                inputWindow.close();
+                ipcMain.removeListener('password-entered', passwordEnteredHandler);
+                ipcMain.removeListener('password-cancel', passwordCancelHandler);
+                resolve(null);
+            }
+        };
+
+        ipcMain.on('password-entered', passwordEnteredHandler);
+        ipcMain.on('password-cancel', passwordCancelHandler);
+    });
+}
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -13,27 +190,41 @@ function createWindow() {
         backgroundColor: '#1e1e2e',
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false, // Required for nodeIntegration in renderer
-            webviewTag: true // Required for <webview>
+            contextIsolation: false,
+            webviewTag: true
         }
     });
 
     mainWindow.loadFile('index.html');
 
-    // Open DevTools for debugging (optional, helping the user)
-    // mainWindow.webContents.openDevTools();
+    // Cleanup on close
+    mainWindow.on('closed', () => {
+        if (database) {
+            database.close();
+        }
+        mainWindow = null;
+    });
 }
 
-app.whenReady().then(() => {
-    createWindow();
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    });
-});
+app.whenReady().then(initializeApp);
 
 app.on('window-all-closed', () => {
+    if (isInitializing) return;
+
+    if (database) {
+        database.close();
+    }
     if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        if (isAuthenticated) {
+            createWindow();
+        } else {
+            initializeApp();
+        }
+    }
 });
 
 // --- IPC Handlers ---
@@ -41,7 +232,12 @@ app.on('window-all-closed', () => {
 ipcMain.on('start-agent', (event, { goal, webContentsId }) => {
     console.log(`[Main] Starting agent for goal: "${goal}"`);
 
-    // Find the guest webContents (the browser view)
+    if (!isAuthenticated || !database) {
+        event.sender.send('agent-log', '❌ Error: Database not initialized.');
+        event.sender.send('agent-stopped');
+        return;
+    }
+
     const guestContents = webContents.fromId(webContentsId);
 
     if (!guestContents) {
@@ -55,8 +251,14 @@ ipcMain.on('start-agent', (event, { goal, webContentsId }) => {
         activeAgent.stop();
     }
 
-    // Initialize Agent with (Guest, UI)
-    activeAgent = new Agent(guestContents, event.sender);
+    // Initialize Enhanced Agent with all components
+    activeAgent = new EnhancedAgent(
+        guestContents,
+        event.sender,
+        contextManager,
+        learningEngine
+    );
+
     activeAgent.start(goal);
 });
 
@@ -65,7 +267,75 @@ ipcMain.on('stop-agent', (event) => {
     if (activeAgent) {
         activeAgent.stop();
         activeAgent = null;
-    } else {
-        event.sender.send('agent-stopped');
+    }
+    event.sender.send('agent-stopped');
+});
+
+// --- Chat IPC Handlers ---
+
+ipcMain.on('chat-user-message', (event, message) => {
+    console.log(`[Main] Chat message from user: ${message}`);
+
+    if (activeAgent) {
+        activeAgent.handleUserResponse(message);
+    }
+});
+
+ipcMain.on('chat-search', (event, query) => {
+    console.log(`[Main] Chat search: ${query}`);
+
+    if (activeAgent) {
+        const results = activeAgent.searchChatHistory(query);
+        event.sender.send('chat-search-results', results);
+    }
+});
+
+// --- Agent Event Forwarding ---
+
+// Forward agent questions to UI
+ipcMain.on('agent-question', (event, questionData) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('agent-question', questionData);
+    }
+});
+
+// Forward chat messages to UI
+ipcMain.on('chat-message', (event, messageData) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('chat-message', messageData);
+    }
+});
+
+// --- Database Management IPC ---
+
+ipcMain.handle('get-session-stats', async () => {
+    if (!activeAgent) return null;
+    return activeAgent.getSessionStats();
+});
+
+ipcMain.handle('get-chat-history', async () => {
+    if (!activeAgent) return [];
+    return activeAgent.getChatHistory();
+});
+
+ipcMain.handle('export-learning-data', async () => {
+    if (!learningEngine) return null;
+    return learningEngine.exportLearnedData();
+});
+
+ipcMain.on('cleanup-old-data', () => {
+    if (database) {
+        const cleaned = database.cleanupOldData(90);
+        console.log(`[Main] Cleaned up ${cleaned} old sessions`);
+    }
+});
+
+// Handle app exit gracefully
+app.on('before-quit', () => {
+    if (activeAgent) {
+        activeAgent.stop();
+    }
+    if (database) {
+        database.close();
     }
 });

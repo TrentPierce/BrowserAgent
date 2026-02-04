@@ -156,7 +156,7 @@ class SecureDatabase {
 
     // Session management
     createSession(goal, domain = null) {
-        const uuid = require('uuid').v4();
+        const uuid = crypto.randomUUID();
         const stmt = this.db.prepare(`
             INSERT INTO sessions (session_uuid, goal, domain, status, start_time)
             VALUES (?, ?, ?, 'active', datetime('now'))
