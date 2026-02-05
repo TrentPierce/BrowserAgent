@@ -1,16 +1,16 @@
 {
-  "name": "@trentpierce/browser-agent",
+  "name": "@trentpierce/koda",
   "version": "2.2.0",
-  "description": "An intelligent AI-powered browser automation library with computer vision, distributed execution, enterprise scaling, accessibility testing, performance monitoring, and security testing capabilities",
+  "description": "The enterprise-grade AI browser agent. Features multi-LLM support (Gemini/OpenAI/Claude), self-healing selectors, computer vision, mobile automation, and distributed cloud execution.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "bin": {
-    "browser-agent": "bin/browser-agent.js"
+    "koda": "bin/koda.js"
   },
   "scripts": {
     "start": "electron main.js",
-    "start:standalone": "node bin/browser-agent.js standalone",
-    "start:server": "node bin/browser-agent.js server",
+    "start:standalone": "node bin/koda.js standalone",
+    "start:server": "node bin/koda.js server",
     "test": "jest --coverage --passWithNoTests || exit 0",
     "test:watch": "jest --watch",
     "test:unit": "jest --testPathPattern=tests/unit --passWithNoTests",
@@ -21,7 +21,7 @@
     "build": "npm run build:docs || exit 0",
     "build:docs": "jsdoc -c jsdoc.json 2>/dev/null || echo 'Docs build skipped'",
     "prepublishOnly": "npm run lint:strict && npm test",
-    "docker:build": "docker build -t browser-agent .",
+    "docker:build": "docker build -t koda .",
     "docker:run": "docker-compose up -d",
     "docker:stop": "docker-compose down"
   },
@@ -56,18 +56,23 @@
     "pattern-recognition",
     "enterprise",
     "wcag",
-    "a11y"
+    "a11y",
+    "web-agent",
+    "autonomous-agent",
+    "self-healing",
+    "testing-framework",
+    "browser-use"
   ],
   "author": "Trent Pierce",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TrentPierce/BrowserAgent.git"
+    "url": "https://github.com/TrentPierce/Koda.git"
   },
   "bugs": {
-    "url": "https://github.com/TrentPierce/BrowserAgent/issues"
+    "url": "https://github.com/TrentPierce/Koda/issues"
   },
-  "homepage": "https://github.com/TrentPierce/BrowserAgent#readme",
+  "homepage": "https://github.com/TrentPierce/Koda#readme",
   "files": [
     "src/",
     "bin/",

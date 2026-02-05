@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * BROWSER AGENT - BASE CLASS
+ * KODA - BASE CLASS
  * ============================================================================
  * 
  * ARCHITECTURE OVERVIEW:
@@ -36,9 +36,9 @@
  * 
  * ============================================================================
  * 
- * This project uses BrowserAgent by Trent Pierce
- * https://github.com/TrentPierce/BrowserAgent
- * Licensed under the BrowserAgent Non-Commercial License
+ * This project uses Koda by Trent Pierce
+ * https://github.com/TrentPierce/Koda
+ * Licensed under the Koda Non-Commercial License
  * 
  * Copyright (c) 2026 Trent Pierce. All rights reserved.
  * See LICENSE file for full terms.
@@ -50,12 +50,12 @@ console.log('[Agent] *** AGENT.JS VERSION 2.0 LOADED ***');
 
 // Configuration constants
 const AGENT_CONFIG = {
-  model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-  maxElements: parseInt(process.env.AGENT_MAX_ELEMENTS, 10) || 50,
-  screenshotQuality: parseInt(process.env.AGENT_SCREENSHOT_QUALITY, 10) || 70,
-  loopDelay: parseInt(process.env.AGENT_LOOP_DELAY, 10) || 3000,
-  pageLoadTimeout: parseInt(process.env.AGENT_PAGE_LOAD_TIMEOUT, 10) || 5000,
-  apiKeyMinLength: parseInt(process.env.AGENT_API_KEY_MIN_LENGTH, 10) || 10
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+    maxElements: parseInt(process.env.AGENT_MAX_ELEMENTS, 10) || 50,
+    screenshotQuality: parseInt(process.env.AGENT_SCREENSHOT_QUALITY, 10) || 70,
+    loopDelay: parseInt(process.env.AGENT_LOOP_DELAY, 10) || 3000,
+    pageLoadTimeout: parseInt(process.env.AGENT_PAGE_LOAD_TIMEOUT, 10) || 5000,
+    apiKeyMinLength: parseInt(process.env.AGENT_API_KEY_MIN_LENGTH, 10) || 10
 };
 
 // JSON Schema for structured output (using plain strings for compatibility)

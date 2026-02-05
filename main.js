@@ -1,10 +1,10 @@
 /**
- * BrowserAgent - Intelligent Browser Automation
+ * Koda - Intelligent Browser Automation
  * Electron Main Process
  * 
- * This project uses BrowserAgent by Trent Pierce
- * https://github.com/TrentPierce/BrowserAgent
- * Licensed under the BrowserAgent Non-Commercial License
+ * This project uses Koda by Trent Pierce
+ * https://github.com/TrentPierce/Koda
+ * Licensed under the Koda Non-Commercial License
  * 
  * Copyright (c) 2026 Trent Pierce. All rights reserved.
  * See LICENSE file for full terms.

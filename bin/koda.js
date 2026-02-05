@@ -1,25 +1,25 @@
 #!/usr/bin/env node
 
 /**
- * BrowserAgent CLI
- * Command-line interface for BrowserAgent
+ * Koda CLI
+ * Command-line interface for Koda
  */
 
 const { program } = require('commander');
 const packageJson = require('../package.json');
 
 program
-    .name('browser-agent')
+    .name('koda')
     .description('Intelligent Browser Automation with Multi-LLM Support')
     .version(packageJson.version);
 
 // Standalone mode
 program
     .command('standalone')
-    .description('Run BrowserAgent in standalone mode (Electron UI)')
+    .description('Run Koda in standalone mode (Electron UI)')
     .option('-h, --headless', 'Run in headless mode')
     .action((options) => {
-        console.log('Starting BrowserAgent in standalone mode...');
+        console.log('Starting Koda in standalone mode...');
 
         // Check if electron is available
         let electronPath;
@@ -30,7 +30,7 @@ program
             console.log('\nTo use standalone mode, install electron:');
             console.log('  npm install -D electron');
             console.log('\nAlternatively, use one of these modes:');
-            console.log('  - Server mode:    node bin/browser-agent.js server');
+            console.log('  - Server mode:    node bin/koda.js server');
             console.log('  - Library mode:   See QUICKSTART.md for examples');
             process.exit(1);
         }
@@ -52,12 +52,12 @@ program
 // Server mode
 program
     .command('server')
-    .description('Run BrowserAgent as API server')
+    .description('Run Koda as API server')
     .option('-p, --port <port>', 'HTTP API port', '3000')
     .option('-w, --ws-port <port>', 'WebSocket port', '3001')
     .option('--host <host>', 'Host to bind to', '0.0.0.0')
     .action(async (options) => {
-        console.log('Starting BrowserAgent API server...');
+        console.log('Starting Koda API server...');
 
         const { RestAPIServer } = require('../src/api/RestAPIServer');
         const { WebSocketServer } = require('../src/api/WebSocketServer');
@@ -95,7 +95,7 @@ program
             await apiServer.start();
             await wsServer.start();
 
-            console.log('\nBrowserAgent is ready!');
+            console.log('\nKoda is ready!');
             console.log('Press Ctrl+C to stop');
 
             // Graceful shutdown
@@ -163,7 +163,7 @@ program
     .command('info')
     .description('Show system information')
     .action(() => {
-        console.log('BrowserAgent System Information');
+        console.log('Koda System Information');
         console.log('================================');
         console.log(`Version: ${packageJson.version}`);
         console.log(`Node.js: ${process.version}`);

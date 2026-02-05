@@ -1,12 +1,18 @@
-# BrowserAgent - Enterprise AI-Powered Browser Automation
+<p align="center">
+  <img src="docs/images/koda_logo.png" width="300" alt="Koda Logo">
+</p>
 
-[![Tests](https://github.com/TrentPierce/BrowserAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/TrentPierce/BrowserAgent/actions)
-[![npm version](https://badge.fury.io/js/@trentpierce%2Fbrowser-agent.svg)](https://www.npmjs.com/package/@trentpierce/browser-agent)
+# Koda 🤖
+### The Enterprise AI Browser Automation Platform
+
+[![Tests](https://github.com/TrentPierce/Koda/actions/workflows/ci.yml/badge.svg)](https://github.com/TrentPierce/Koda/actions)
+[![npm version](https://badge.fury.io/js/@trentpierce%2Fkoda.svg)](https://www.npmjs.com/package/@trentpierce/koda)
 [![License: Non-Commercial](https://img.shields.io/badge/License-Non--Commercial-red.svg)](LICENSE)
 
-An enterprise-grade automation platform with multi-LLM support, visual understanding, temporal awareness, adaptive learning, **mobile automation (iOS/Android)**, **reinforcement learning**, and **Browserbase cloud integration**.
+**Koda** is the advanced autonomous agent for the web. It goes beyond simple scrapers by using **Computer Vision** and **Multi-LLM Intelligence** (Gemini, OpenAI, Claude) to understand, interact with, and master any web application, just like a human user.
 
-> **🚀 Enterprise Ready**: Production-tested, CI/CD integrated, with comprehensive test coverage and security best practices.
+> **🚀 Enterprise Capabilities**: Self-healing selectors, distributed cloud execution, mobile app automation, and SOC 2 compliant architecture.
+
 
 ## Table of Contents
 
@@ -125,11 +131,11 @@ An enterprise-grade automation platform with multi-LLM support, visual understan
 ### Basic Web Automation
 
 ```bash
-npm install @trentpierce/browser-agent
+npm install @trentpierce/koda
 ```
 
 ```javascript
-const { createAgent } = require('@trentpierce/browser-agent');
+const { createAgent } = require('@trentpierce/koda');
 
 async function main() {
     // Create agent with your preferred LLM provider
@@ -166,7 +172,7 @@ main().catch(console.error);
 ### Browserbase Cloud Automation
 
 ```javascript
-const { BrowserbaseProvider } = require('@trentpierce/browser-agent/enterprise');
+const { BrowserbaseProvider } = require('@trentpierce/koda/enterprise');
 const puppeteer = require('puppeteer');
 
 async function cloudAutomation() {
@@ -200,7 +206,7 @@ async function cloudAutomation() {
 ### Session Pooling for Scale
 
 ```javascript
-const { BrowserbaseSessionManager } = require('@trentpierce/browser-agent/enterprise');
+const { BrowserbaseSessionManager } = require('@trentpierce/koda/enterprise');
 
 const manager = new BrowserbaseSessionManager({
     maxSessions: 10,
@@ -227,7 +233,7 @@ await manager.releaseSession(session);
 ### Mobile Automation
 
 ```bash
-npm install @trentpierce/browser-agent
+npm install @trentpierce/koda
 npm install -g appium
 appium driver install uiautomator2  # For Android
 appium driver install xcuitest      # For iOS
@@ -235,7 +241,7 @@ appium --port 4723                  # Start Appium server
 ```
 
 ```javascript
-const { MobileAgent } = require('@trentpierce/browser-agent/mobile');
+const { MobileAgent } = require('@trentpierce/koda/mobile');
 
 // Android automation
 const agent = new MobileAgent({
@@ -260,7 +266,7 @@ await agent.close();
 ### Reinforcement Learning
 
 ```javascript
-const { ReinforcementAgent } = require('@trentpierce/browser-agent/learning');
+const { ReinforcementAgent } = require('@trentpierce/koda/learning');
 
 // Create RL agent
 const rlAgent = new ReinforcementAgent({
@@ -322,8 +328,9 @@ npm install sharp opencv4nodejs
 ### Standalone Installation
 
 ```bash
-git clone https://github.com/TrentPierce/BrowserAgent.git
-cd BrowserAgent
+```bash
+git clone https://github.com/TrentPierce/Koda.git
+cd Koda
 git checkout dev
 npm install
 cp .env.example .env
@@ -333,24 +340,24 @@ npm start
 
 ## Core API Reference
 
-### BrowserAgent Class
+### Koda Class
 
 The main class for browser automation with Stagehand-compatible API.
 
 ```javascript
-const { BrowserAgent, createAgent } = require('@trentpierce/browser-agent');
+const { BrowserAgent, createAgent } = require('@trentpierce/koda');
 
 // Create and initialize agent
 const agent = await createAgent(options);
 // OR
-const agent = new BrowserAgent(options);
+const agent = new Koda(options);
 await agent.init();
 ```
 
 #### Constructor Options
 
 ```javascript
-const agent = new BrowserAgent({
+const agent = new Koda({
     // LLM Provider Configuration
     provider: 'gemini',           // 'gemini', 'openai', or 'anthropic'
     apiKey: process.env.GEMINI_API_KEY,  // API key for the provider
@@ -426,7 +433,7 @@ await agent.close();
 Test across multiple browsers with the same code:
 
 ```javascript
-const { BrowserFactory, BROWSER_TYPES } = require('@trentpierce/browser-agent');
+const { BrowserFactory, BROWSER_TYPES } = require('@trentpierce/koda');
 
 // Launch different browsers
 const chromeBrowser = await BrowserFactory.launch(BROWSER_TYPES.CHROME, {
@@ -438,7 +445,7 @@ const firefoxBrowser = await BrowserFactory.launch(BROWSER_TYPES.FIREFOX, {
     headless: true
 });
 
-// Use with BrowserAgent
+// Use with Koda
 const agent = await createAgent({
     provider: 'gemini',
     apiKey: process.env.GEMINI_API_KEY,
@@ -451,7 +458,7 @@ const agent = await createAgent({
 Automatically adapt when sites change:
 
 ```javascript
-const { SelectorEngine, SelfHealingSelector, SELECTOR_TYPES } = require('@trentpierce/browser-agent');
+const { SelectorEngine, SelfHealingSelector, SELECTOR_TYPES } = require('@trentpierce/koda');
 
 // Create healing selector
 const healingSelector = new SelfHealingSelector({
@@ -490,7 +497,7 @@ const result = await engine.findWithHealing(page, '#my-btn', {
 Mock APIs and intercept requests:
 
 ```javascript
-const { NetworkInterceptor } = require('@trentpierce/browser-agent');
+const { NetworkInterceptor } = require('@trentpierce/koda');
 
 const interceptor = new NetworkInterceptor();
 await interceptor.init(page);
@@ -538,7 +545,7 @@ console.log('Requests made:', networkLog.length);
 Persistent authentication across sessions:
 
 ```javascript
-const { SessionManager } = require('@trentpierce/browser-agent');
+const { SessionManager } = require('@trentpierce/koda');
 
 const sessions = new SessionManager({
     storagePath: './sessions'
@@ -576,7 +583,7 @@ await sessions.authenticate(page, {
 Visual element detection and OCR:
 
 ```javascript
-const { ComputerVision } = require('@trentpierce/browser-agent/vision');
+const { ComputerVision } = require('@trentpierce/koda/vision');
 
 const cv = new ComputerVision({
     geminiApiKey: process.env.GEMINI_API_KEY,
@@ -613,7 +620,7 @@ if (changes.changed) {
 Built-in and custom tools:
 
 ```javascript
-const { ToolRegistry, WebSearchTool, DatabaseTool, APITool, FileTool, ScreenshotTool } = require('@trentpierce/browser-agent/tools');
+const { ToolRegistry, WebSearchTool, DatabaseTool, APITool, FileTool, ScreenshotTool } = require('@trentpierce/koda/tools');
 
 // Create tool registry
 const registry = new ToolRegistry();
@@ -698,7 +705,7 @@ registry.registerTool('customCalculator', async (params) => {
 Scale across multiple workers:
 
 ```javascript
-const { DistributedExecutor } = require('@trentpierce/browser-agent/enterprise');
+const { DistributedExecutor } = require('@trentpierce/koda/enterprise');
 
 const executor = new DistributedExecutor({
     maxWorkers: 8,
@@ -734,7 +741,7 @@ await executor.shutdown();
 Handle high-volume requests:
 
 ```javascript
-const { LoadBalancer } = require('@trentpierce/browser-agent/enterprise');
+const { LoadBalancer } = require('@trentpierce/koda/enterprise');
 
 const lb = new LoadBalancer({
     maxConcurrentRequests: 100,
@@ -768,7 +775,7 @@ console.log('Success rate:', stats.successRate);
 Real-time metrics and alerting:
 
 ```javascript
-const { MonitoringDashboard } = require('@trentpierce/browser-agent/enterprise');
+const { MonitoringDashboard } = require('@trentpierce/koda/enterprise');
 
 const dashboard = new MonitoringDashboard({
     port: 3000,
