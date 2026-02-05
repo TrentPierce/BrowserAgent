@@ -2,37 +2,48 @@
   "categories": [
     {
       "title": "## 🚀 Features",
-      "labels": ["feature", "enhancement"]
+      "labels": ["feature", "enhancement", "feat"]
     },
     {
       "title": "## 🐛 Bug Fixes",
-      "labels": ["bug", "fix"]
+      "labels": ["bug", "fix", "bugfix"]
     },
     {
       "title": "## 📚 Documentation",
       "labels": ["documentation", "docs"]
     },
     {
-      "title": "## 🧪 Testing",
-      "labels": ["test", "testing"]
+      "title": "## 🔧 Maintenance",
+      "labels": ["chore", "dependencies", "deps"]
     },
     {
-      "title": "## 🔧 Maintenance",
-      "labels": ["maintenance", "chore", "dependencies"]
+      "title": "## ⚡ Performance",
+      "labels": ["performance", "perf"]
     },
     {
       "title": "## 🔒 Security",
       "labels": ["security"]
+    },
+    {
+      "title": "## 🧪 Testing",
+      "labels": ["test", "testing"]
+    },
+    {
+      "title": "## 🎨 Styling",
+      "labels": ["style", "styling"]
     }
   ],
   "ignore_labels": [
     "ignore",
+    "skip-changelog",
     "wontfix",
-    "duplicate"
+    "duplicate",
+    "invalid"
   ],
   "sort": "ASC",
-  "template": "${{CHANGELOG}}\n\n**Full Changelog**: ${{RELEASE_DIFF}}",
-  "pr_template": "- ${{TITLE}} by @${{AUTHOR}} in #${{NUMBER}}",
-  "empty_template": "No changes in this release",
-  "transformers": []
+  "template": "#{{CHANGELOG}}\n\n## Contributors\n\nThank you to all contributors who made this release possible!\n",
+  "pr_template": "- #{{TITLE}} (#{{NUMBER}}) by @#{{AUTHOR}}",
+  "empty_template": "- No changes",
+  "max_tags_to_fetch": 200,
+  "max_pull_requests": 200
 }
