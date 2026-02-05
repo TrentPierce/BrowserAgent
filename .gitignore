@@ -116,6 +116,9 @@ Thumbs.db
 # Application specific
 agent_memory.db
 .salt
+.auth_store
+branches.txt
+lint.txt
 *.db-journal
 
 # Build outputs

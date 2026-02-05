@@ -525,6 +525,12 @@ class EnhancedAgent extends Agent {
         if (context.recentActions && context.recentActions.length > 0) {
             const actionSummary = context.recentActions.slice(-5).map((a, idx) => {
                 const status = a.success === true ? '✓' : a.success === false ? '✗' : '?';
+
+                // Special handling for user guidance
+                if (a.type === 'user_guidance') {
+                    return `🗣️ USER SAID: "${a.details.guidance}"`;
+                }
+
                 let detail = '';
                 if (a.details) {
                     if (a.details.selector) detail = ` ${a.details.selector}`;
@@ -877,20 +883,33 @@ JSON only. No markdown, no explanation.
         // Handle user input when not in a question state
         this.log(`💬 User message: ${input}`);
 
-        // Check if user is giving instructions
-        if (input.toLowerCase().includes('click') ||
-            input.toLowerCase().includes('type') ||
-            input.toLowerCase().includes('go to')) {
+        // If the agent is currently 'active' (in the middle of a loop), we want to inject this guidance
+        // so the NEXT step considers it. We can add it to the learning engine or context.
 
-            this.addChatMessage('agent', "👍 I'll follow your instructions!");
-            // Parse simple commands could be added here
-            this.isWaitingForUser = false;
-            this.loop();
-        } else {
-            this.addChatMessage('agent', "👍 I've noted that. Let me continue with the task.");
-            this.isWaitingForUser = false;
-            this.loop();
+        // 1. Add as a temporary high-priority recommendation/context
+        if (this.contextManager) {
+            // We'll treat this as a "user_override" action in history so the LLM sees it immediately
+            this.contextManager.logAction('user_guidance', {
+                guidance: input
+            }, {
+                success: true,
+                autoHandled: true
+            });
         }
+
+        this.addChatMessage('agent', "👍 I've received your instruction and will apply it to the next step.");
+
+        // 2. If we were waiting or paused, this should kickstart us
+        if (this.isWaitingForUser) {
+            this.isWaitingForUser = false;
+            this.pendingQuestion = null;
+        }
+
+        // 3. Force loop to run immediately with new context
+        // We use setTimeout to break the stack and ensure state is updated
+        setTimeout(() => {
+            if (this.active) this.loop();
+        }, 100);
     }
 
     addChatMessage(sender, message, type = 'text') {

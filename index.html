@@ -1934,7 +1934,7 @@
                 this.addLogEntry('user', 'You', message);
                 this.elements.chatInput.value = '';
 
-                // TODO: Send to agent
+                // Send to agent via Electron API
                 if (window.electronAPI) {
                     window.electronAPI.sendChatMessage(message);
                 }
@@ -1965,28 +1965,52 @@
             }
 
             showDialog(title, text, options = []) {
-                document.getElementById('dialogTitle').textContent = title;
-                document.getElementById('dialogText').textContent = text;
+                document.getElementById('dialogTitle').innerText = title;
+                document.getElementById('dialogText').innerText = text;
 
                 const optionsContainer = document.getElementById('dialogOptions');
                 optionsContainer.innerHTML = '';
+
+                const responseInput = document.getElementById('dialogInput');
+                responseInput.value = '';
+
+                const submitResponse = (response) => {
+                    this.hideDialog();
+                    this.addLogEntry('user', 'You', response);
+                    if (window.electronAPI) {
+                        window.electronAPI.sendChatMessage(response);
+                    }
+                };
 
                 options.forEach(option => {
                     const btn = document.createElement('button');
                     btn.className = 'dialog-option';
                     btn.textContent = option;
-                    btn.addEventListener('click', () => {
-                        this.hideDialog();
-                        // TODO: Send response
-                    });
+                    btn.addEventListener('click', () => submitResponse(option));
                     optionsContainer.appendChild(btn);
                 });
+
+                // Handle manual input
+                document.getElementById('btnDialogSubmit').onclick = () => {
+                    if (responseInput.value.trim()) {
+                        submitResponse(responseInput.value.trim());
+                    }
+                };
+
+                // Handle cancel/skip
+                document.getElementById('btnDialogCancel').onclick = () => {
+                    this.hideDialog();
+                    this.addLogEntry('user', 'You', 'Skipped question');
+                };
 
                 this.elements.dialogOverlay.classList.add('active');
             }
 
             hideDialog() {
                 this.elements.dialogOverlay.classList.remove('active');
+                // Remove listeners to prevent duplicates next time
+                document.getElementById('btnDialogSubmit').onclick = null;
+                document.getElementById('btnDialogCancel').onclick = null;
             }
         }
 
