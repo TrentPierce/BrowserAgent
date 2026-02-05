@@ -150,6 +150,7 @@ async function promptForNewPassword() {
             maximizable: false,
             closable: true,
             alwaysOnTop: true,
+            icon: path.join(__dirname, 'docs/images/koda_logo.png'),
             webPreferences: {
                 preload: path.join(__dirname, 'preload.js'),
                 contextIsolation: true,
@@ -207,6 +208,7 @@ async function promptForPassword() {
             maximizable: false,
             closable: true,
             alwaysOnTop: true,
+            icon: path.join(__dirname, 'docs/images/koda_logo.png'),
             webPreferences: {
                 preload: path.join(__dirname, 'preload.js'),
                 contextIsolation: true,
@@ -260,6 +262,8 @@ function createWindow() {
         height: 900,
         backgroundColor: '#1e1e2e',
         show: true, // Ensure window is visible immediately
+        icon: path.join(__dirname, 'docs/images/koda_logo.png'),
+        autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,

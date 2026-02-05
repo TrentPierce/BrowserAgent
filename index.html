@@ -163,14 +163,8 @@
         .logo-icon {
             width: 36px;
             height: 36px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.25rem;
-            box-shadow: 0 4px 12px rgba(26, 95, 78, 0.3);
-            border: 1px solid rgba(212, 168, 83, 0.2);
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
         }
 
         .sidebar-toggle {
@@ -1204,9 +1198,11 @@
         }
 
         .welcome-icon {
-            font-size: 4rem;
+            width: 120px;
+            height: auto;
             margin-bottom: var(--space-lg);
             animation: float-icon 6s ease-in-out infinite;
+            filter: drop-shadow(0 4px 12px rgba(26, 95, 78, 0.3));
         }
 
         @keyframes float-icon {
@@ -1381,7 +1377,7 @@
             <!-- Header -->
             <div class="sidebar-header">
                 <div class="logo">
-                    <div class="logo-icon">🤖</div>
+                    <img src="docs/images/koda_logo.png" class="logo-icon" alt="Koda Logo">
                     <span class="logo-text">Koda</span>
                 </div>
                 <button class="sidebar-toggle tooltip" id="sidebarToggle" data-tooltip="Toggle sidebar"
@@ -1550,7 +1546,7 @@
             <div class="webview-container" id="webviewContainer">
                 <!-- Welcome Screen (shown initially) -->
                 <div class="welcome-screen" id="welcomeScreen">
-                    <div class="welcome-icon">🌐</div>
+                    <img src="docs/images/koda_logo.png" class="welcome-icon" alt="Koda Logo">
                     <h1 class="welcome-title">Welcome to Koda</h1>
                     <p class="welcome-subtitle">
                         Your AI-powered browser assistant. Tell me what you want to do, and I'll help you navigate the
