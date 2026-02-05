@@ -47,7 +47,8 @@ class LearningEngine {
 
     // Record successful action for learning
     async recordSuccess(action, executionDetails) {
-        if (!this.contextManager.currentDomain) return;
+        if (!this.contextManager?.currentDomain) return;
+        if (!this.db) return; // No database, skip recording
 
         const domain = this.contextManager.currentDomain;
         const actionType = this.categorizeAction(action);
@@ -58,26 +59,31 @@ class LearningEngine {
         // Extract context keywords from DOM
         const contextKeywords = this.extractContextKeywords(executionDetails.domContext);
 
-        // Record pattern
-        this.db.recordPattern(
-            actionType,
-            domain,
-            selectorPattern,
-            contextKeywords,
-            1.0 // Full success
-        );
+        try {
+            // Record pattern
+            this.db.recordPattern(
+                actionType,
+                domain,
+                selectorPattern,
+                contextKeywords,
+                1.0 // Full success
+            );
 
-        // Update user preferences if applicable
-        if (actionType === 'preference') {
-            this.db.setPreference(domain, action.preferenceKey, action.preferenceValue, 0.9);
+            // Update user preferences if applicable
+            if (actionType === 'preference') {
+                this.db.setPreference(domain, action.preferenceKey, action.preferenceValue, 0.9);
+            }
+
+            console.log(`[LearningEngine] Recorded success for ${actionType} on ${domain}`);
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error recording success:`, e.message);
         }
-
-        console.log(`[LearningEngine] Recorded success for ${actionType} on ${domain}`);
     }
 
     // Record failed action
     async recordFailure(action, error, attemptNumber) {
-        if (!this.contextManager.currentDomain) return;
+        if (!this.contextManager?.currentDomain) return;
+        if (!this.db) return; // No database, skip recording
 
         const domain = this.contextManager.currentDomain;
         const actionType = this.categorizeAction(action);
@@ -89,37 +95,54 @@ class LearningEngine {
         // Calculate success rate based on attempt number
         const successRate = Math.max(0, 1.0 - (attemptNumber * 0.3));
 
-        this.db.recordPattern(
-            actionType,
-            domain,
-            selectorPattern,
-            contextKeywords,
-            successRate
-        );
+        try {
+            this.db.recordPattern(
+                actionType,
+                domain,
+                selectorPattern,
+                contextKeywords,
+                successRate
+            );
 
-        console.log(`[LearningEngine] Recorded failure for ${actionType} on ${domain} (attempt ${attemptNumber})`);
+            console.log(`[LearningEngine] Recorded failure for ${actionType} on ${domain} (attempt ${attemptNumber})`);
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error recording failure:`, e.message);
+        }
     }
 
     // Get learned strategies for current domain
     getStrategiesForCurrentDomain(actionType = null) {
-        if (!this.contextManager.currentDomain) return [];
+        if (!this.contextManager?.currentDomain) return [];
+        if (!this.db) return [];
 
-        return this.db.getPatternsForDomain(
-            this.contextManager.currentDomain,
-            actionType,
-            0.3 // Minimum 30% success rate
-        );
+        try {
+            return this.db.getPatternsForDomain(
+                this.contextManager.currentDomain,
+                actionType,
+                0.3 // Minimum 30% success rate
+            );
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error getting strategies:`, e.message);
+            return [];
+        }
     }
 
     // Apply learned modifications to an action
     applyLearnedStrategies(action, attemptNumber) {
-        if (!this.contextManager.currentDomain) return action;
+        if (!this.contextManager?.currentDomain) return action;
+        if (!this.db) return action;
 
         const domain = this.contextManager.currentDomain;
         const actionType = this.categorizeAction(action);
 
-        // Get learned patterns for this action type
-        const patterns = this.db.getPatternsForDomain(domain, actionType, 0.5);
+        let patterns = [];
+        try {
+            // Get learned patterns for this action type
+            patterns = this.db.getPatternsForDomain(domain, actionType, 0.5);
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error getting patterns:`, e.message);
+            return action;
+        }
 
         if (patterns.length === 0) return action;
 
@@ -248,32 +271,37 @@ class LearningEngine {
 
     // Get recommendations for current state
     getRecommendations() {
-        if (!this.contextManager.currentDomain) return [];
+        if (!this.contextManager?.currentDomain) return [];
+        if (!this.db) return [];
 
         const domain = this.contextManager.currentDomain;
-        const recentActions = this.contextManager.actionHistory.slice(-5);
+        const recentActions = this.contextManager.actionHistory?.slice(-5) || [];
 
         const recommendations = [];
 
-        // Check for common patterns on this domain
-        const topPatterns = this.db.getPatternsForDomain(domain, null, 0.8);
+        try {
+            // Check for common patterns on this domain
+            const topPatterns = this.db.getPatternsForDomain(domain, null, 0.8);
 
-        if (topPatterns.length > 0) {
-            recommendations.push({
-                type: 'learned_pattern',
-                message: `This site often uses "${topPatterns[0].selector_pattern}" selectors`,
-                confidence: topPatterns[0].success_rate
-            });
-        }
+            if (topPatterns.length > 0) {
+                recommendations.push({
+                    type: 'learned_pattern',
+                    message: `This site often uses "${topPatterns[0].selector_pattern}" selectors`,
+                    confidence: topPatterns[0].success_rate
+                });
+            }
 
-        // Check for user preferences
-        const preferences = this.db.getAllPreferencesForDomain(domain);
-        if (preferences.length > 0) {
-            recommendations.push({
-                type: 'user_preference',
-                message: `You have ${preferences.length} saved preferences for this site`,
-                preferences: preferences
-            });
+            // Check for user preferences
+            const preferences = this.db.getAllPreferencesForDomain(domain);
+            if (preferences.length > 0) {
+                recommendations.push({
+                    type: 'user_preference',
+                    message: `You have ${preferences.length} saved preferences for this site`,
+                    preferences: preferences
+                });
+            }
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error getting recommendations:`, e.message);
         }
 
         // Detect potential issues
@@ -291,18 +319,24 @@ class LearningEngine {
 
     // Analyze patterns and suggest improvements
     analyzePatterns() {
-        const domain = this.contextManager.currentDomain;
+        const domain = this.contextManager?.currentDomain;
         if (!domain) return null;
+        if (!this.db) return { domain, totalPatterns: 0, averageSuccessRate: 0, totalUses: 0, effectiveness: 'learning' };
 
-        const stats = this.db.getDomainLearningStats(domain);
+        try {
+            const stats = this.db.getDomainLearningStats(domain);
 
-        return {
-            domain: domain,
-            totalPatterns: stats.total_patterns || 0,
-            averageSuccessRate: stats.avg_success_rate || 0,
-            totalUses: stats.total_uses || 0,
-            effectiveness: this.calculateEffectiveness(stats)
-        };
+            return {
+                domain: domain,
+                totalPatterns: stats?.total_patterns || 0,
+                averageSuccessRate: stats?.avg_success_rate || 0,
+                totalUses: stats?.total_uses || 0,
+                effectiveness: this.calculateEffectiveness(stats)
+            };
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error analyzing patterns:`, e.message);
+            return { domain, totalPatterns: 0, averageSuccessRate: 0, totalUses: 0, effectiveness: 'learning' };
+        }
     }
 
     calculateEffectiveness(stats) {
@@ -319,8 +353,8 @@ class LearningEngine {
     // Generate helpful question when stuck
     generateClarifyingQuestion(action, error, context) {
         const actionType = this.categorizeAction(action);
-        const recentActions = this.contextManager.actionHistory.slice(-3);
-        const domain = this.contextManager.currentDomain || 'this site';
+        const recentActions = this.contextManager?.actionHistory?.slice(-3) || [];
+        const domain = this.contextManager?.currentDomain || 'this site';
         const currentUrl = context?.currentUrl || 'current page';
 
         let question = '';
@@ -425,86 +459,118 @@ class LearningEngine {
 
     // Update strategy based on user feedback
     updateStrategyFromFeedback(action, userFeedback, success) {
-        if (!this.contextManager.currentDomain) return;
+        if (!this.contextManager?.currentDomain) return;
+        if (!this.db) return;
 
         const domain = this.contextManager.currentDomain;
         const actionType = this.categorizeAction(action);
 
-        // Extract what user corrected
-        if (userFeedback.toLowerCase().includes('click') && userFeedback.toLowerCase().includes('instead')) {
-            // User suggested a different element to click
-            this.db.setPreference(domain, 'click_strategy', 'user_corrected', 0.95);
+        try {
+            // Extract what user corrected
+            if (userFeedback.toLowerCase().includes('click') && userFeedback.toLowerCase().includes('instead')) {
+                // User suggested a different element to click
+                this.db.setPreference(domain, 'click_strategy', 'user_corrected', 0.95);
+            }
+
+            if (userFeedback.toLowerCase().includes('wait') || userFeedback.toLowerCase().includes('slow')) {
+                // User wants slower execution
+                this.db.setPreference(domain, 'timing', 'slower', 0.9);
+            }
+
+            if (userFeedback.toLowerCase().includes('scroll')) {
+                // User wants scrolling
+                this.db.setPreference(domain, 'scroll_first', 'true', 0.85);
+            }
+
+            // Record this as a high-confidence pattern
+            const selectorPattern = this.extractSelectorPattern(action.selector);
+            const contextKeywords = this.extractContextKeywords(userFeedback);
+
+            this.db.recordPattern(
+                actionType,
+                domain,
+                selectorPattern,
+                contextKeywords,
+                success ? 0.95 : 0.3
+            );
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error updating strategy:`, e.message);
         }
-
-        if (userFeedback.toLowerCase().includes('wait') || userFeedback.toLowerCase().includes('slow')) {
-            // User wants slower execution
-            this.db.setPreference(domain, 'timing', 'slower', 0.9);
-        }
-
-        if (userFeedback.toLowerCase().includes('scroll')) {
-            // User wants scrolling
-            this.db.setPreference(domain, 'scroll_first', 'true', 0.85);
-        }
-
-        // Record this as a high-confidence pattern
-        const selectorPattern = this.extractSelectorPattern(action.selector);
-        const contextKeywords = this.extractContextKeywords(userFeedback);
-
-        this.db.recordPattern(
-            actionType,
-            domain,
-            selectorPattern,
-            contextKeywords,
-            success ? 0.95 : 0.3
-        );
     }
 
     // Cross-domain learning - transfer knowledge from similar domains
     getCrossDomainTips(currentDomain) {
-        // Get patterns from similar domains
-        const allPatterns = this.db.db.prepare(`
-            SELECT * FROM patterns 
-            WHERE success_rate > 0.8 
-            ORDER BY use_count DESC 
-            LIMIT 20
-        `).all();
+        if (!this.db || !this.db.db) return [];
 
-        // Group by pattern type
-        const patternsByType = {};
-        for (const pattern of allPatterns) {
-            if (!patternsByType[pattern.pattern_type]) {
-                patternsByType[pattern.pattern_type] = [];
+        try {
+            // Get patterns from similar domains
+            const allPatterns = this.db.db.prepare(`
+                SELECT * FROM patterns 
+                WHERE success_rate > 0.8 
+                ORDER BY use_count DESC 
+                LIMIT 20
+            `).all();
+
+            // Group by pattern type
+            const patternsByType = {};
+            for (const pattern of allPatterns) {
+                if (!patternsByType[pattern.pattern_type]) {
+                    patternsByType[pattern.pattern_type] = [];
+                }
+                patternsByType[pattern.pattern_type].push(pattern);
             }
-            patternsByType[pattern.pattern_type].push(pattern);
-        }
 
-        // Return most universal patterns
-        const tips = [];
-        for (const [type, patterns] of Object.entries(patternsByType)) {
-            if (patterns.length > 2) {
-                tips.push({
-                    patternType: type,
-                    commonStrategy: patterns[0].selector_pattern,
-                    successRate: patterns[0].success_rate,
-                    source: 'cross_domain_learning'
-                });
+            // Return most universal patterns
+            const tips = [];
+            for (const [type, patterns] of Object.entries(patternsByType)) {
+                if (patterns.length > 2) {
+                    tips.push({
+                        patternType: type,
+                        commonStrategy: patterns[0].selector_pattern,
+                        successRate: patterns[0].success_rate,
+                        source: 'cross_domain_learning'
+                    });
+                }
             }
-        }
 
-        return tips;
+            return tips;
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error getting cross-domain tips:`, e.message);
+            return [];
+        }
     }
 
     // Export learned data for backup/analysis
     exportLearnedData() {
-        const domain = this.contextManager.currentDomain;
+        const domain = this.contextManager?.currentDomain;
+        if (!this.db) {
+            return {
+                domain: domain,
+                patterns: [],
+                preferences: [],
+                timestamp: new Date().toISOString(),
+                effectiveness: { domain, totalPatterns: 0, averageSuccessRate: 0, totalUses: 0, effectiveness: 'learning' }
+            };
+        }
 
-        return {
-            domain: domain,
-            patterns: this.db.getPatternsForDomain(domain),
-            preferences: this.db.getAllPreferencesForDomain(domain),
-            timestamp: new Date().toISOString(),
-            effectiveness: this.analyzePatterns()
-        };
+        try {
+            return {
+                domain: domain,
+                patterns: this.db.getPatternsForDomain(domain),
+                preferences: this.db.getAllPreferencesForDomain(domain),
+                timestamp: new Date().toISOString(),
+                effectiveness: this.analyzePatterns()
+            };
+        } catch (e) {
+            console.warn(`[LearningEngine] Database error exporting data:`, e.message);
+            return {
+                domain: domain,
+                patterns: [],
+                preferences: [],
+                timestamp: new Date().toISOString(),
+                effectiveness: { domain, totalPatterns: 0, averageSuccessRate: 0, totalUses: 0, effectiveness: 'learning' }
+            };
+        }
     }
 }
 

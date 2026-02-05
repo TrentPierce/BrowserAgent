@@ -34,8 +34,16 @@ class ContextManager {
         const domain = initialUrl ? this.extractDomain(initialUrl) : null;
         this.currentDomain = domain;
 
-        // Create session in database
-        const session = this.db.createSession(goal, domain);
+        // Create session in database (if available)
+        let session = { id: Date.now(), uuid: crypto.randomUUID() };
+        if (this.db) {
+            try {
+                session = this.db.createSession(goal, domain);
+            } catch (e) {
+                console.warn('[ContextManager] Database error, using in-memory session:', e.message);
+            }
+        }
+
         this.currentSession = {
             id: session.id,
             uuid: session.uuid,
@@ -60,14 +68,22 @@ class ContextManager {
             return;
         }
 
-        // Update session in database
-        this.db.endSession(this.currentSession.id, status);
+        // Update session in database (if available)
+        if (this.db) {
+            try {
+                this.db.endSession(this.currentSession.id, status);
 
-        // Save URL history
-        const stmt = this.db.db.prepare(`
-            UPDATE sessions SET url_history = ? WHERE id = ?
-        `);
-        stmt.run(JSON.stringify(this.urlHistory), this.currentSession.id);
+                // Save URL history
+                if (this.db.db) {
+                    const stmt = this.db.db.prepare(`
+                        UPDATE sessions SET url_history = ? WHERE id = ?
+                    `);
+                    stmt.run(JSON.stringify(this.urlHistory), this.currentSession.id);
+                }
+            } catch (e) {
+                console.warn('[ContextManager] Database error ending session:', e.message);
+            }
+        }
 
         console.log(`[ContextManager] Session ended: ${this.currentSession.uuid} with status: ${status}`);
 
@@ -103,11 +119,18 @@ class ContextManager {
             executionTimeMs: options.executionTimeMs || null
         };
 
-        const interactionId = this.db.logInteraction(
-            this.currentSession.id,
-            actionType,
-            interaction
-        );
+        let interactionId = Date.now();
+        if (this.db) {
+            try {
+                interactionId = this.db.logInteraction(
+                    this.currentSession.id,
+                    actionType,
+                    interaction
+                );
+            } catch (e) {
+                console.warn('[ContextManager] Database error logging action:', e.message);
+            }
+        }
 
         // Track in memory
         this.actionHistory.push({
@@ -122,7 +145,13 @@ class ContextManager {
     }
 
     updateActionResult(interactionId, success, feedback = null) {
-        this.db.updateInteractionSuccess(interactionId, success, feedback);
+        if (this.db) {
+            try {
+                this.db.updateInteractionSuccess(interactionId, success, feedback);
+            } catch (e) {
+                console.warn('[ContextManager] Database error updating action result:', e.message);
+            }
+        }
 
         // Update in-memory history
         const action = this.actionHistory.find(a => a.id === interactionId);
@@ -138,10 +167,16 @@ class ContextManager {
 
         // Update session domain if changed
         if (this.currentSession && this.currentDomain !== this.currentSession.domain) {
-            const stmt = this.db.db.prepare(`
-                UPDATE sessions SET domain = ? WHERE id = ?
-            `);
-            stmt.run(this.currentDomain, this.currentSession.id);
+            if (this.db && this.db.db) {
+                try {
+                    const stmt = this.db.db.prepare(`
+                        UPDATE sessions SET domain = ? WHERE id = ?
+                    `);
+                    stmt.run(this.currentDomain, this.currentSession.id);
+                } catch (e) {
+                    console.warn('[ContextManager] Database error updating domain:', e.message);
+                }
+            }
             this.currentSession.domain = this.currentDomain;
         }
     }
@@ -172,11 +207,23 @@ class ContextManager {
 
     getSessionHistory(limit = 50) {
         if (!this.currentSession) return [];
-        return this.db.getSessionInteractions(this.currentSession.id, limit);
+        if (!this.db) return this.actionHistory.slice(-limit);
+        try {
+            return this.db.getSessionInteractions(this.currentSession.id, limit);
+        } catch (e) {
+            console.warn('[ContextManager] Database error getting session history:', e.message);
+            return this.actionHistory.slice(-limit);
+        }
     }
 
     getSessionStats(sessionId) {
-        return this.db.getSessionStats(sessionId);
+        if (!this.db) return null;
+        try {
+            return this.db.getSessionStats(sessionId);
+        } catch (e) {
+            console.warn('[ContextManager] Database error getting session stats:', e.message);
+            return null;
+        }
     }
 
     // Chat message management
@@ -186,13 +233,20 @@ class ContextManager {
             return null;
         }
 
-        const messageId = this.db.addChatMessage(
-            this.currentSession.id,
-            sender,
-            message,
-            messageType,
-            context
-        );
+        let messageId = Date.now();
+        if (this.db) {
+            try {
+                messageId = this.db.addChatMessage(
+                    this.currentSession.id,
+                    sender,
+                    message,
+                    messageType,
+                    context
+                );
+            } catch (e) {
+                console.warn('[ContextManager] Database error adding chat message:', e.message);
+            }
+        }
 
         this.currentSession.chatMessages.push({
             id: messageId,
@@ -207,34 +261,70 @@ class ContextManager {
 
     getChatHistory(limit = 50) {
         if (!this.currentSession) return [];
-        return this.db.getChatHistory(this.currentSession.id, limit);
+        if (!this.db) {
+            return this.currentSession.chatMessages.slice(-limit);
+        }
+        try {
+            return this.db.getChatHistory(this.currentSession.id, limit);
+        } catch (e) {
+            console.warn('[ContextManager] Database error getting chat history:', e.message);
+            return this.currentSession.chatMessages.slice(-limit);
+        }
     }
 
     searchChatHistory(searchQuery, limit = 20) {
         if (!this.currentSession) return [];
-        return this.db.searchChatHistory(this.currentSession.id, searchQuery, limit);
+        if (!this.db) {
+            const lowerQuery = searchQuery.toLowerCase();
+            return this.currentSession.chatMessages
+                .filter(m => m.message.toLowerCase().includes(lowerQuery))
+                .slice(-limit);
+        }
+        try {
+            return this.db.searchChatHistory(this.currentSession.id, searchQuery, limit);
+        } catch (e) {
+            console.warn('[ContextManager] Database error searching chat history:', e.message);
+            return [];
+        }
     }
 
     // Challenge tracking
     recordChallenge(challengeType, description, attemptedSolutions = []) {
         if (!this.currentSession) return null;
+        if (!this.db) return Date.now();
 
-        return this.db.recordChallenge(
-            this.currentSession.id,
-            this.currentDomain,
-            challengeType,
-            description,
-            attemptedSolutions
-        );
+        try {
+            return this.db.recordChallenge(
+                this.currentSession.id,
+                this.currentDomain,
+                challengeType,
+                description,
+                attemptedSolutions
+            );
+        } catch (e) {
+            console.warn('[ContextManager] Database error recording challenge:', e.message);
+            return null;
+        }
     }
 
     resolveChallenge(challengeId, resolution, userGuidance, success) {
-        this.db.resolveChallenge(challengeId, resolution, userGuidance, success);
+        if (!this.db) return;
+        try {
+            this.db.resolveChallenge(challengeId, resolution, userGuidance, success);
+        } catch (e) {
+            console.warn('[ContextManager] Database error resolving challenge:', e.message);
+        }
     }
 
     getSimilarChallenges(challengeType) {
         if (!this.currentDomain) return [];
-        return this.db.getSimilarChallenges(this.currentDomain, challengeType);
+        if (!this.db) return [];
+        try {
+            return this.db.getSimilarChallenges(this.currentDomain, challengeType);
+        } catch (e) {
+            console.warn('[ContextManager] Database error getting similar challenges:', e.message);
+            return [];
+        }
     }
 
     // Context analysis
@@ -356,7 +446,19 @@ class ContextManager {
 
     // Resume previous session (if applicable)
     resumeSession(sessionId) {
-        const session = this.db.getSession(sessionId);
+        if (!this.db) {
+            console.warn('[ContextManager] Cannot resume session: database not available');
+            return false;
+        }
+
+        let session;
+        try {
+            session = this.db.getSession(sessionId);
+        } catch (e) {
+            console.warn('[ContextManager] Database error resuming session:', e.message);
+            return false;
+        }
+
         if (!session) {
             console.warn(`[ContextManager] Session ${sessionId} not found`);
             return false;
