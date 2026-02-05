@@ -15,11 +15,14 @@
            ============================================ */
         :root {
             /* Colors - Enterprise Professional Palette */
-            --primary: #1a5f4e; /* Deep emerald - conveys trust & sophistication */
+            --primary: #1a5f4e;
+            /* Deep emerald - conveys trust & sophistication */
             --primary-hover: #13443a;
             --primary-light: rgba(26, 95, 78, 0.12);
-            --secondary: #0c3d32; /* Darker navy variant */
-            --accent: #d4a853; /* Muted gold - luxury accent */
+            --secondary: #0c3d32;
+            /* Darker navy variant */
+            --accent: #d4a853;
+            /* Muted gold - luxury accent */
 
             /* Neutrals - Navy-based dark theme */
             --bg-primary: #0a0f14;
@@ -591,6 +594,31 @@
             background: rgba(163, 176, 202, 0.25);
         }
 
+        /* Compact view mode */
+        .activity-log.compact .log-entry {
+            margin-bottom: var(--space-xs);
+            padding-bottom: var(--space-xs);
+        }
+
+        .activity-log.compact .log-header {
+            margin-bottom: 2px;
+        }
+
+        .activity-log.compact .log-avatar {
+            width: 20px;
+            height: 20px;
+            font-size: 0.625rem;
+        }
+
+        .activity-log.compact .log-author {
+            font-size: 0.75rem;
+        }
+
+        .activity-log.compact .log-message {
+            font-size: 0.75rem;
+            padding-left: 28px;
+        }
+
         .log-entry {
             margin-bottom: var(--space-md);
             padding-bottom: var(--space-md);
@@ -960,16 +988,23 @@
         }
 
         .tab-close {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
+            font-size: 12px;
             opacity: 0;
             transition: all 0.2s ease;
-            margin-right: -4px;
+            margin-left: auto;
+            flex-shrink: 0;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0;
+            border: none;
+            background: transparent;
+            color: inherit;
         }
 
         .tab:hover .tab-close,
@@ -1175,7 +1210,9 @@
         }
 
         @keyframes float-icon {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: translateY(0);
             }
 
@@ -1608,12 +1645,32 @@
                 this.setupElectronListeners();
             }
 
+            requestAgentStop() {
+                // Only call this when user manually clicks stop
+                if (window.electronAPI && this.state.isRunning) {
+                    window.electronAPI.stopAgent();
+                }
+            }
+
             setupElectronListeners() {
                 if (!window.electronAPI) return;
 
                 // Log updates
                 window.electronAPI.onAgentLog((message) => {
                     this.addLogEntry('agent', 'BrowserAgent', message);
+
+                    // Track progress based on log messages
+                    if (message.includes('Navigating') || message.includes('goto')) {
+                        this.updateProgress(20);
+                    } else if (message.includes('Capturing') || message.includes('screenshot')) {
+                        this.updateProgress(40);
+                    } else if (message.includes('Thinking') || message.includes('Analyzing')) {
+                        this.updateProgress(60);
+                    } else if (message.includes('click') || message.includes('type')) {
+                        this.updateProgress(80);
+                    } else if (message.includes('completed') || message.includes('success')) {
+                        this.updateProgress(100);
+                    }
                 });
 
                 // Stats updates
@@ -1622,14 +1679,20 @@
 
                     const elApiCalls = document.getElementById('devApiCalls');
                     const elTokens = document.getElementById('devTokens');
-                    if (elApiCalls) elApiCalls.textContent = stats.apiCalls;
-                    if (elTokens) elTokens.textContent = stats.tokens;
+                    if (elApiCalls) elApiCalls.textContent = stats.apiCalls || 0;
+                    if (elTokens) elTokens.textContent = stats.tokens || 0;
+
+                    // Update success rate if available
+                    if (stats.successRate !== undefined) {
+                        this.updateSuccessRate(stats.successRate);
+                    }
                 });
 
-                // Auto-stop
+                // Auto-stop - Agent completed task
                 window.electronAPI.onAgentStopped(() => {
                     this.stopAgent();
-                    this.addLogEntry('system', 'System', 'Agent finished task');
+                    this.updateProgress(100);
+                    this.addLogEntry('system', 'System', '✅ Task completed successfully');
                 });
 
                 // Questions from agent
@@ -1643,6 +1706,22 @@
                     const author = data.sender === 'user' ? 'You' : 'BrowserAgent';
                     this.addLogEntry(data.sender, author, data.message);
                 });
+
+                // Listen for tab changes
+                // Listen for tab changes via CustomEvent
+                window.addEventListener('tab-updated', (e) => {
+                    if (e.detail && e.detail.title) {
+                        this.updateActiveTab(e.detail.title);
+                    }
+                });
+
+                // Set initial active tab
+                if (window.tabManager && window.tabManager.activeTabId) {
+                    const activeTab = window.tabManager.tabs.get(window.tabManager.activeTabId);
+                    if (activeTab) {
+                        this.updateActiveTab(activeTab.title || 'New Tab');
+                    }
+                }
             }
 
             setupEventListeners() {
@@ -1662,7 +1741,19 @@
 
                 // Start/Stop buttons
                 this.elements.btnStart.addEventListener('click', () => this.startAgent());
-                this.elements.btnStop.addEventListener('click', () => this.stopAgent());
+                this.elements.btnStop.addEventListener('click', () => this.requestAgentStop());
+
+                // Clear logs button
+                const btnClearLogs = document.getElementById('btnClearLogs');
+                if (btnClearLogs) {
+                    btnClearLogs.addEventListener('click', () => this.clearLogs());
+                }
+
+                // Compact view button
+                const btnCompactView = document.getElementById('btnCompactView');
+                if (btnCompactView) {
+                    btnCompactView.addEventListener('click', () => this.toggleCompactView());
+                }
 
                 // Keyboard shortcuts
                 this.elements.goalInput.addEventListener('keydown', (e) => {
@@ -1686,6 +1777,41 @@
                         this.navigateTo(this.elements.urlInput.value);
                     }
                 });
+            }
+
+            clearLogs() {
+                this.elements.activityLog.innerHTML = '';
+                this.addLogEntry('system', 'System', 'Logs cleared');
+            }
+
+            toggleCompactView() {
+                this.elements.activityLog.classList.toggle('compact');
+                const isCompact = this.elements.activityLog.classList.contains('compact');
+                this.addLogEntry('system', 'System', isCompact ? 'Compact view enabled' : 'Compact view disabled');
+            }
+
+            updateProgress(percent) {
+                if (this.elements.progressFill) {
+                    this.elements.progressFill.style.width = percent + '%';
+                }
+                if (this.elements.statProgress) {
+                    this.elements.statProgress.textContent = percent + '%';
+                }
+            }
+
+            updateSuccessRate(rate) {
+                const el = document.getElementById('devSuccessRate');
+                if (el) {
+                    el.textContent = rate + '%';
+                    el.className = 'dev-metric-value ' + (rate >= 80 ? 'success' : rate >= 50 ? 'warning' : 'error');
+                }
+            }
+
+            updateActiveTab(tabName) {
+                const el = document.getElementById('devActiveTab');
+                if (el) {
+                    el.textContent = tabName || 'None';
+                }
             }
 
             setupModeSwitcher() {
@@ -1773,7 +1899,14 @@
                 this.elements.statusIndicator.classList.remove('active');
                 this.elements.statusIndicator.querySelector('span:last-child').textContent = 'Ready';
                 this.elements.progressFill.classList.remove('animating');
-                this.elements.progressFill.style.width = '0%';
+
+                // Keep progress at 100% for a moment so user can see completion, then reset
+                setTimeout(() => {
+                    if (!this.state.isRunning) {
+                        this.elements.progressFill.style.width = '0%';
+                        this.elements.statProgress.textContent = '0%';
+                    }
+                }, 3000);
 
                 // Stop timer
                 clearInterval(this.state.timerInterval);
@@ -1781,10 +1914,8 @@
                 // Log stop
                 this.addLogEntry('agent', 'BrowserAgent', 'Automation stopped');
 
-                // TODO: Connect to actual agent
-                if (window.electronAPI) {
-                    window.electronAPI.stopAgent();
-                }
+                // Don't call stopAgent again if we're already stopping - prevents endless loop
+                // The main process will notify us when agent is fully stopped
             }
 
             updateTimer() {

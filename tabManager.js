@@ -127,6 +127,17 @@ class TabManager {
                 titleEl.textContent = this.truncateTitle(tabData.title);
             }
             tabData.tabElement.title = tabData.title;
+
+            // Dispatch event for UI
+            if (tabData.isActive) {
+                window.dispatchEvent(new CustomEvent('tab-updated', {
+                    detail: {
+                        id: tabId,
+                        title: tabData.title,
+                        url: tabData.url
+                    }
+                }));
+            }
         });
 
         webview.addEventListener('page-favicon-updated', (e) => {
@@ -157,6 +168,15 @@ class TabManager {
             newTab.webview.style.zIndex = '1';
             this.activeTabId = tabId;
             this.updateUrlBar(newTab.url);
+
+            // Dispatch event for UI
+            window.dispatchEvent(new CustomEvent('tab-updated', {
+                detail: {
+                    id: tabId,
+                    title: newTab.title,
+                    url: newTab.url
+                }
+            }));
 
             // Notify main process of tab switch
             if (window.ipcRenderer) {
@@ -194,10 +214,19 @@ class TabManager {
     }
 
     updateUrlBar(url) {
-        const urlInput = document.getElementById('url-input');
+        const urlInput = document.getElementById('urlInput');
         if (urlInput) {
             urlInput.value = url;
         }
+
+        // Dispatch event for UI to pick up
+        window.dispatchEvent(new CustomEvent('tab-updated', {
+            detail: {
+                id: this.activeTabId,
+                title: this.tabs.get(this.activeTabId)?.title,
+                url: url
+            }
+        }));
     }
 
     getActiveTab() {

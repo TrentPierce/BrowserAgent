@@ -16,6 +16,44 @@ const { LLMProviderFactory } = require('./providers/LLMProviderFactory');
 const { TaskOrchestrator } = require('../taskOrchestrator');
 const { ToolRegistry } = require('./tools/ToolRegistry');
 
+// New Browser Infrastructure
+const {
+  BrowserAdapter,
+  ChromeAdapter,
+  FirefoxAdapter,
+  SafariAdapter,
+  EdgeAdapter,
+  PageAdapter,
+  ContextManager,
+  BrowserFactory,
+  BROWSER_TYPES
+} = require('./browser');
+
+// Selectors
+const {
+  SelectorEngine,
+  SELECTOR_TYPES,
+  SelfHealingSelector
+} = require('./selectors');
+
+// Network
+const { NetworkInterceptor } = require('./network');
+
+// Session
+const { SessionManager } = require('./session');
+
+// Waiting
+const { AutoWaiter } = require('./waiting');
+
+// Trace
+const { TraceViewer } = require('./trace');
+
+// Debugging
+const { DOMSnapshotManager } = require('./debugging');
+
+// Human Behavior
+const { HumanBehaviorSimulator } = require('./human');
+
 /**
  * Stagehand-compatible BrowserAgent
  * Provides a simple API interface similar to Stagehand while maintaining
@@ -223,10 +261,47 @@ async function createAgent(options = {}) {
 }
 
 module.exports = {
+  // Main BrowserAgent
   BrowserAgent,
   createAgent,
+  
+  // Core Components
   BrowserAgentCore,
   LLMProviderFactory,
   TaskOrchestrator,
-  ToolRegistry
+  ToolRegistry,
+  
+  // Browser Adapters (Multi-Browser Support)
+  BrowserAdapter,
+  ChromeAdapter,
+  FirefoxAdapter,
+  SafariAdapter,
+  EdgeAdapter,
+  PageAdapter,
+  ContextManager,
+  BrowserFactory,
+  BROWSER_TYPES,
+  
+  // Selectors (Self-Healing)
+  SelectorEngine,
+  SELECTOR_TYPES,
+  SelfHealingSelector,
+  
+  // Network (Interception & Mocking)
+  NetworkInterceptor,
+  
+  // Session (Auth Management)
+  SessionManager,
+  
+  // Waiting (Auto-Wait)
+  AutoWaiter,
+  
+  // Trace (Execution Recording)
+  TraceViewer,
+  
+  // Debugging (DOM Snapshots)
+  DOMSnapshotManager,
+  
+  // Human Behavior Simulation
+  HumanBehaviorSimulator
 };

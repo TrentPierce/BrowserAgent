@@ -182,7 +182,7 @@ class Agent {
             // Capture State (DOM + Screenshot) used from the Guest
             const simplifiedDOM = await this.getSimplifiedDOM();
             const screenshot = await this.guestWebContents.capturePage();
-            const base64Image = screenshot.toJPEG(${AGENT_CONFIG.screenshotQuality}).toString('base64'); // Configurable quality to save tokens
+            const base64Image = screenshot.toJPEG(AGENT_CONFIG.screenshotQuality).toString('base64'); // Configurable quality to save tokens
 
             // Think (Gemini)
             this.log("🧠 Thinking...");
@@ -197,7 +197,7 @@ class Agent {
 
             // Wait/Loop
             if (actionPlan.action !== 'done') {
-                await new Promise(r => setTimeout(r, ${AGENT_CONFIG.loopDelay}));
+                await new Promise(r => setTimeout(r, AGENT_CONFIG.loopDelay));
                 this.loop();
             } else {
                 this.log("🎉 Goal achieved (according to agent).");
@@ -219,7 +219,7 @@ class Agent {
                         resolve();
                     } else {
                         window.addEventListener('load', resolve, { once: true });
-                        setTimeout(resolve, ${AGENT_CONFIG.pageLoadTimeout}); // Configurable timeout
+                        setTimeout(resolve, ` + AGENT_CONFIG.pageLoadTimeout + `); // Configurable timeout
                     }
                 });
             `);
@@ -234,7 +234,7 @@ class Agent {
         const counterStart = this.agentIdCounter;
         const script = `
         (function() {
-            const MAX_ELEMENTS = ${AGENT_CONFIG.maxElements}; // Configurable max elements
+            const MAX_ELEMENTS = ` + AGENT_CONFIG.maxElements + `; // Configurable max elements
             const elements = document.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="option"], [onclick], label, h1, h2, h3, h4, p, span, .modal, .popup, .overlay, .dialog, [aria-label*="close" i], [class*="close" i], [class*="dismiss" i], [class*="accept" i]');
             const lines = [];
             const seenText = new Set();

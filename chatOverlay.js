@@ -1,6 +1,12 @@
+/**
+ * ChatOverlay - Injected UI for Browser Agent
+ * Uses Shadow DOM to isolate styles and behavior from the host page.
+ */
 class ChatOverlay {
     constructor() {
         this.messages = [];
+        this.host = null;
+        this.shadow = null;
         this.container = null;
         this.messagesContainer = null;
         this.inputContainer = null;
@@ -8,23 +14,54 @@ class ChatOverlay {
         this.isExpanded = true;
         this.isTyping = false;
         this.unreadCount = 0;
-        
+
         this.init();
     }
 
     init() {
-        this.createOverlay();
-        this.attachEventListeners();
-        this.loadInitialMessages();
+        // Wait for body if not ready (though usually injected after load)
+        if (document.body) {
+            this.createOverlay();
+            this.loadInitialMessages();
+        } else {
+            window.addEventListener('DOMContentLoaded', () => {
+                this.createOverlay();
+                this.loadInitialMessages();
+            });
+        }
     }
 
     createOverlay() {
-        // Create main container
+        // 1. Create Host (Fixed wrapper)
+        this.host = document.createElement('div');
+        this.host.id = 'browser-agent-overlay-host';
+
+        // Host styles - fixed, non-blocking
+        Object.assign(this.host.style, {
+            position: 'fixed',
+            zIndex: '2147483647', // Max safe integer
+            bottom: '0',
+            left: '0',
+            right: '0',
+            height: '0', // Doesn't take up layout space
+            display: 'block',
+            fontSize: '16px',
+            lineHeight: 'normal',
+            pointerEvents: 'none', // Let clicks pass through default areas
+            overflow: 'visible'
+        });
+
+        // 2. Create Shadow Root (Open mode for accessibility/debug)
+        this.shadow = this.host.attachShadow({ mode: 'open' });
+
+        // 3. Create Container (The visible overlay)
         this.container = document.createElement('div');
         this.container.id = 'chat-overlay';
         this.container.className = 'chat-overlay expanded';
-        
-        // Create header
+
+        // 4. Build Internal Structure
+
+        // Header
         const header = document.createElement('div');
         header.className = 'chat-header';
         header.innerHTML = `
@@ -38,8 +75,8 @@ class ChatOverlay {
                 <button class="chat-btn chat-toggle" title="Toggle chat">−</button>
             </div>
         `;
-        
-        // Create search container
+
+        // Search Container
         this.searchContainer = document.createElement('div');
         this.searchContainer.className = 'chat-search-container';
         this.searchContainer.style.display = 'none';
@@ -47,13 +84,13 @@ class ChatOverlay {
             <input type="text" class="chat-search-input" placeholder="Search chat history...">
             <button class="chat-search-close">✕</button>
         `;
-        
-        // Create messages container
+
+        // Messages Container
         this.messagesContainer = document.createElement('div');
         this.messagesContainer.className = 'chat-messages';
         this.messagesContainer.id = 'chat-messages';
-        
-        // Create input container
+
+        // Input Container
         this.inputContainer = document.createElement('div');
         this.inputContainer.className = 'chat-input-container';
         this.inputContainer.innerHTML = `
@@ -73,28 +110,43 @@ class ChatOverlay {
                 </span>
             </div>
         `;
-        
-        // Assemble overlay
+
+        // Assemble Overlay
         this.container.appendChild(header);
         this.container.appendChild(this.searchContainer);
         this.container.appendChild(this.messagesContainer);
         this.container.appendChild(this.inputContainer);
-        
-        // Add to page
-        document.body.appendChild(this.container);
-        
-        // Add styles
-        this.addStyles();
+
+        // 5. Add Styles
+        const style = document.createElement('style');
+        style.textContent = this.getStyles();
+
+        // 6. Append to Shadow
+        this.shadow.appendChild(style);
+        this.shadow.appendChild(this.container);
+
+        // 7. Inject Host into Page
+        document.body.appendChild(this.host);
+
+        // 8. setup listeners
+        this.attachEventListeners();
     }
 
-    addStyles() {
-        const styles = document.createElement('style');
-        styles.textContent = `
-            /* Google Fonts import for premium typography */
+    getStyles() {
+        return `
             @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+            :host {
+                all: initial; /* Reset inherited styles */
+                font-family: 'DM Sans', 'Söhne', ui-sans-serif, system-ui, -apple-system, sans-serif;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
             .chat-overlay {
-                position: fixed;
+                position: absolute; /* Relative to host */
                 bottom: 0;
                 left: 0;
                 right: 0;
@@ -103,13 +155,13 @@ class ChatOverlay {
                 display: flex;
                 flex-direction: column;
                 z-index: 10000;
-                font-family: 'DM Sans', 'Söhne', ui-sans-serif, system-ui, -apple-system, sans-serif;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+                pointer-events: auto; /* Enable clicks */
             }
 
             .chat-overlay.expanded {
-                height: 260px;
+                height: 300px;
             }
 
             .chat-overlay.collapsed {
@@ -279,6 +331,11 @@ class ChatOverlay {
                 margin-left: 20px;
                 padding: 8px 14px;
                 border: 1px solid rgba(212, 168, 83, 0.2);
+                cursor: pointer;
+            }
+            
+            .chat-message.option:hover {
+                background: rgba(212, 168, 83, 0.2);
             }
 
             .chat-message.system {
@@ -356,12 +413,6 @@ class ChatOverlay {
                 transform: translateY(0);
             }
 
-            .chat-send-btn:disabled {
-                opacity: 0.4;
-                cursor: not-allowed;
-                transform: none;
-            }
-
             .chat-typing-indicator {
                 display: flex;
                 align-items: center;
@@ -376,26 +427,15 @@ class ChatOverlay {
                 animation: typingAnimation 1.5s infinite;
                 animation-fill-mode: both;
             }
-
-            .typing-dots span:nth-child(2) {
-                animation-delay: 0.2s;
-            }
-
-            .typing-dots span:nth-child(3) {
-                animation-delay: 0.4s;
-            }
+            
+            .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+            .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 
             @keyframes typingAnimation {
-                0%, 60%, 100% {
-                    opacity: 0;
-                    transform: translateY(0);
-                }
-                30% {
-                    opacity: 1;
-                    transform: translateY(-3px);
-                }
+                0%, 60%, 100% { opacity: 0; transform: translateY(0); }
+                30% { opacity: 1; transform: translateY(-3px); }
             }
-
+            
             .chat-search-results {
                 background: #1a2532;
                 border: 1px solid rgba(163, 176, 202, 0.12);
@@ -419,98 +459,77 @@ class ChatOverlay {
                 background: #253242;
                 color: #f0f2f5;
             }
-
-            .chat-search-result:last-child {
-                border-bottom: none;
-            }
-
-            /* Scrollbar styling */
-            .chat-messages::-webkit-scrollbar {
-                width: 6px;
-            }
-
-            .chat-messages::-webkit-scrollbar-track {
-                background: #0e151c;
-            }
-
-            .chat-messages::-webkit-scrollbar-thumb {
-                background: rgba(163, 176, 202, 0.15);
-                border-radius: 3px;
-            }
-
-            .chat-messages::-webkit-scrollbar-thumb:hover {
-                background: rgba(212, 168, 83, 0.3);
-            }
+            
+            /* Scrollbar */
+            .chat-messages::-webkit-scrollbar { width: 6px; }
+            .chat-messages::-webkit-scrollbar-track { background: #0e151c; }
+            .chat-messages::-webkit-scrollbar-thumb { background: rgba(163, 176, 202, 0.15); border-radius: 3px; }
+            .chat-messages::-webkit-scrollbar-thumb:hover { background: rgba(212, 168, 83, 0.3); }
         `;
-
-        document.head.appendChild(styles);
     }
 
     attachEventListeners() {
-        // Toggle chat
         const toggleBtn = this.container.querySelector('.chat-toggle');
         const header = this.container.querySelector('.chat-header');
-        
+
         toggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggle();
         });
-        
+
         header.addEventListener('click', () => {
             if (this.container.classList.contains('collapsed')) {
                 this.expand();
             }
         });
-        
-        // Send message
+
         const input = this.container.querySelector('.chat-input');
         const sendBtn = this.container.querySelector('.chat-send-btn');
-        
+
         const sendMessage = () => {
             const text = input.value.trim();
             if (text) {
                 this.sendMessage(text);
                 input.value = '';
-                input.style.height = 'auto';
+                input.style.height = 'auto'; // Reset height
             }
         };
-        
+
         sendBtn.addEventListener('click', sendMessage);
-        
+
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
         });
-        
-        // Auto-resize textarea
+
         input.addEventListener('input', () => {
             input.style.height = 'auto';
             input.style.height = Math.min(input.scrollHeight, 100) + 'px';
         });
-        
-        // Search functionality
+
         const searchToggle = this.container.querySelector('.chat-search-toggle');
         const searchClose = this.container.querySelector('.chat-search-close');
         const searchInput = this.container.querySelector('.chat-search-input');
-        
+
         searchToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleSearch();
         });
-        
+
         searchClose.addEventListener('click', () => {
             this.toggleSearch();
         });
-        
+
         searchInput.addEventListener('input', (e) => {
             this.handleSearch(e.target.value);
         });
     }
 
+    // ... (rest of methods: loadInitialMessages, addMessage, renderMessage, etc. unchanged logic) ...
+
     loadInitialMessages() {
-        // Load initial welcome message
         this.addMessage('agent', '👋 Welcome! I\'m your AI browser assistant. Start a task and I\'ll help you navigate.');
     }
 
@@ -521,31 +540,29 @@ class ChatOverlay {
             type: type,
             timestamp: new Date()
         };
-        
+
         this.messages.push(messageObj);
         this.renderMessage(messageObj);
-        
-        // Update unread count if collapsed
+
         if (this.container.classList.contains('collapsed') && sender === 'agent') {
             this.unreadCount++;
             this.updateUnreadCount();
         }
-        
-        // Scroll to bottom
+
         this.scrollToBottom();
     }
 
     renderMessage(messageObj) {
         const messageEl = document.createElement('div');
         messageEl.className = `chat-message ${messageObj.sender} ${messageObj.type}`;
-        
+
         const time = messageObj.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
+
         messageEl.innerHTML = `
             ${this.escapeHtml(messageObj.message)}
             <div class="chat-message-time">${time}</div>
         `;
-        
+
         this.messagesContainer.appendChild(messageEl);
     }
 
@@ -560,12 +577,11 @@ class ChatOverlay {
     }
 
     sendMessage(text) {
-        // Add user message to UI
         this.addMessage('user', text);
-        
-        // Send to main process
-        if (window.ipcRenderer) {
-            window.ipcRenderer.send('chat-user-message', text);
+        if (window.electronAPI) {
+            window.electronAPI.sendChatMessage(text, null);
+        } else if (window.ipcRenderer) {
+            window.ipcRenderer.send('chat-user-message', { message: text, tabId: null });
         }
     }
 
@@ -591,6 +607,7 @@ class ChatOverlay {
         this.container.querySelector('.chat-toggle').textContent = '−';
         this.unreadCount = 0;
         this.updateUnreadCount();
+        this.updateHostHeight();
         this.scrollToBottom();
     }
 
@@ -598,12 +615,13 @@ class ChatOverlay {
         this.container.classList.remove('expanded');
         this.container.classList.add('collapsed');
         this.container.querySelector('.chat-toggle').textContent = '+';
+        this.updateHostHeight();
     }
 
     toggleSearch() {
         const isVisible = this.searchContainer.style.display !== 'none';
         this.searchContainer.style.display = isVisible ? 'none' : 'flex';
-        
+
         if (!isVisible) {
             this.searchContainer.querySelector('.chat-search-input').focus();
         }
@@ -614,21 +632,19 @@ class ChatOverlay {
             this.clearSearchResults();
             return;
         }
-        
-        // Send search request to main process
-        if (window.ipcRenderer) {
+        if (window.electronAPI) {
+            window.electronAPI.searchChat(query);
+        } else if (window.ipcRenderer) {
             window.ipcRenderer.send('chat-search', query);
         }
     }
 
     displaySearchResults(results) {
         this.clearSearchResults();
-        
         if (results.length === 0) {
             this.showSearchResult('No messages found', null);
             return;
         }
-        
         results.forEach(result => {
             const preview = result.message.substring(0, 50) + (result.message.length > 50 ? '...' : '');
             this.showSearchResult(preview, result.id);
@@ -636,21 +652,25 @@ class ChatOverlay {
     }
 
     showSearchResult(text, messageId) {
-        const resultsContainer = document.createElement('div');
-        resultsContainer.className = 'chat-search-results';
-        
+        let resultsContainer = this.searchContainer.querySelector('.chat-search-results');
+
+        if (!resultsContainer) {
+            resultsContainer = document.createElement('div');
+            resultsContainer.className = 'chat-search-results';
+            this.searchContainer.appendChild(resultsContainer);
+        }
+
         const resultEl = document.createElement('div');
         resultEl.className = 'chat-search-result';
         resultEl.textContent = text;
-        
+
         if (messageId) {
             resultEl.addEventListener('click', () => {
                 this.jumpToMessage(messageId);
             });
         }
-        
+
         resultsContainer.appendChild(resultEl);
-        this.searchContainer.appendChild(resultsContainer);
     }
 
     clearSearchResults() {
@@ -661,7 +681,6 @@ class ChatOverlay {
     }
 
     jumpToMessage(messageId) {
-        // Find and scroll to message
         const messageEl = this.messagesContainer.querySelector(`[data-message-id="${messageId}"]`);
         if (messageEl) {
             messageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -680,6 +699,16 @@ class ChatOverlay {
         }
     }
 
+    updateHostHeight() {
+        // Logic to prevent blocking clicks:
+        // Host is pointer-events: none.
+        // Overlay is pointer-events: auto.
+        // So we don't need to change height of host really, 
+        // provided the host doesn't have a background.
+        // Host has no background.
+        // So we are good.
+    }
+
     clear() {
         this.messages = [];
         this.messagesContainer.innerHTML = '';
@@ -688,8 +717,8 @@ class ChatOverlay {
     }
 
     destroy() {
-        if (this.container && this.container.parentNode) {
-            this.container.parentNode.removeChild(this.container);
+        if (this.host && this.host.parentNode) {
+            this.host.parentNode.removeChild(this.host);
         }
     }
 }

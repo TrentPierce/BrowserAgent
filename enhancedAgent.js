@@ -60,6 +60,28 @@ class EnhancedAgent extends Agent {
         this.totalExecutionTime = 0;
     }
 
+    sendStats() {
+        if (!this.uiWebContents.isDestroyed()) {
+            const duration = Math.floor((Date.now() - this.startTime) / 1000);
+            const minutes = Math.floor(duration / 60).toString().padStart(2, '0');
+            const seconds = (duration % 60).toString().padStart(2, '0');
+
+            // Get success rate from learning engine
+            let successRate = 0;
+            if (this.learningEngine && this.contextManager && this.contextManager.currentDomain) {
+                const analysis = this.learningEngine.analyzePatterns();
+                successRate = Math.round((analysis.averageSuccessRate || 0) * 100);
+            }
+
+            this.uiWebContents.send('agent-stats', {
+                time: `${minutes}:${seconds}`,
+                apiCalls: this.apiCalls,
+                tokens: this.totalTokens,
+                successRate: successRate
+            });
+        }
+    }
+
     async start(goal) {
         if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.length < 10) {
             this.log("⚠️ Cannot start: API Key invalid. Please check .env file.");
@@ -100,14 +122,19 @@ class EnhancedAgent extends Agent {
     }
 
     stop() {
+        const wasActive = this.active;
+
         if (this.currentSession) {
-            const status = this.active ? 'cancelled' : 'completed';
+            const status = wasActive ? 'cancelled' : 'completed';
             this.contextManager.endSession(status);
             this.addChatMessage('agent', `Session ${status}`);
         }
 
         this.isWaitingForUser = false;
         this.pendingQuestion = null;
+        this.active = false;
+
+        // Call parent stop - it handles sending the signal
         super.stop();
     }
 
@@ -130,6 +157,9 @@ class EnhancedAgent extends Agent {
                 } else if (loopInfo.type === 'navigation_regression') {
                     this.log(`⚠️ Navigation regression to ${loopInfo.url}! Pausing.`);
                     this.handleStuckState('navigation_regression', `Keep navigating back to ${loopInfo.url}`);
+                } else if (loopInfo.type === 'domain_loop') {
+                    this.log(`⚠️ Domain loop detected (${loopInfo.domains.join(' ↔ ')})! Pausing.`);
+                    this.handleStuckState('domain_loop', `Stuck iterating between ${loopInfo.domains.join(' and ')}`);
                 } else if (loopInfo.type === 'alternating') {
                     this.log(`⚠️ Alternating loop detected (${loopInfo.actions.join(' ↔ ')})! Pausing.`);
                     this.handleStuckState('alternating_loop', `Stuck alternating between ${loopInfo.actions.join(' and ')}`);
@@ -289,7 +319,13 @@ class EnhancedAgent extends Agent {
                 } else {
                     this.log("🎉 Goal achieved!");
                     this.addChatMessage('agent', '🎉 Task completed successfully!');
-                    this.stop();
+                    // Mark as completed and stop
+                    this.active = false;
+                    // Don't call this.stop() here - it will be called by the parent
+                    // Just send the stopped signal once
+                    if (!this.uiWebContents.isDestroyed()) {
+                        this.uiWebContents.send('agent-stopped');
+                    }
                 }
 
                 return;
@@ -489,7 +525,12 @@ class EnhancedAgent extends Agent {
         if (context.recentActions && context.recentActions.length > 0) {
             const actionSummary = context.recentActions.slice(-5).map((a, idx) => {
                 const status = a.success === true ? '✓' : a.success === false ? '✗' : '?';
-                return `${status}${a.type}`;
+                let detail = '';
+                if (a.details) {
+                    if (a.details.selector) detail = ` ${a.details.selector}`;
+                    else if (a.details.url) detail = ` ${a.details.url}`;
+                }
+                return `${status}${a.type}${detail}`;
             }).join(', ');
             historyStr = `\nRecent Actions: ${actionSummary}`;
         }

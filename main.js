@@ -348,7 +348,12 @@ ipcMain.on('stop-agent', (event) => {
         activeAgent.stop();
         activeAgent = null;
     }
-    event.sender.send('agent-stopped');
+    // Notify all renderer processes that agent stopped
+    BrowserWindow.getAllWindows().forEach(window => {
+        if (!window.isDestroyed()) {
+            window.webContents.send('agent-stopped');
+        }
+    });
 });
 
 // Chat handlers

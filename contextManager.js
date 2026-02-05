@@ -347,12 +347,23 @@ class ContextManager {
         if (this.actionHistory.length < threshold) return false;
 
         const recent = this.actionHistory.slice(-threshold);
-        const actionSignatures = recent.map(a => `${a.type}-${JSON.stringify(a.details)}`);
+
+        // Create signature based on functional properties only (ignoring reason/timestamp)
+        const getSignature = (item) => {
+            const d = item.details || {};
+            if (d.action === 'navigate') return `navigate:${d.url}`;
+            if (d.action === 'click') return `click:${d.selector}`;
+            if (d.action === 'type') return `type:${d.selector}:${d.text}`;
+            if (d.action === 'scroll') return `scroll`;
+            return `${d.action}`;
+        };
+
+        const actionSignatures = recent.map(getSignature);
 
         // Check if the same action is repeated
         const uniqueActions = [...new Set(actionSignatures)];
         if (uniqueActions.length === 1) {
-            return { type: 'exact_repeat', action: recent[0].type };
+            return { type: 'exact_repeat', action: recent[0].type, details: recent[0].details };
         }
 
         // Check for scroll loop specifically (scrolling 3+ times in a row)
@@ -372,11 +383,43 @@ class ContextManager {
             }
         }
 
-        // Check for navigation regression (going back to same URL)
+        // Check for navigation regression (going back to same URL, ignoring params)
         if (this.urlHistory.length >= 3) {
-            const recentUrls = this.urlHistory.slice(-3);
-            if (recentUrls[0] === recentUrls[2] && recentUrls[0] !== recentUrls[1]) {
-                return { type: 'navigation_regression', url: recentUrls[0] };
+            const recent = this.urlHistory.slice(-3);
+            const normalize = (u) => {
+                try {
+                    const obj = new URL(u);
+                    return obj.origin + obj.pathname;
+                } catch (e) { return u; }
+            };
+
+            const u0 = normalize(recent[0]);
+            const u1 = normalize(recent[1]);
+            const u2 = normalize(recent[2]);
+
+            if (u0 === u2 && u0 !== u1) {
+                // Only trigger if we've done this TWICE (A->B->A is okay, but A->B->A->B->A is bad)
+                // We check history length to see if we are in a repeating cycle
+                if (this.urlHistory.length >= 5) {
+                    const u3 = normalize(this.urlHistory[this.urlHistory.length - 4]); // B
+                    const u4 = normalize(this.urlHistory[this.urlHistory.length - 5]); // A
+                    if (u3 === u1 && u4 === u0) {
+                        return { type: 'navigation_regression', url: recent[0] };
+                    }
+                }
+            }
+        }
+
+        // Check for domain loop (A -> B -> A -> B)
+        if (this.urlHistory.length >= 4) {
+            const recent = this.urlHistory.slice(-4);
+            const d0 = this.extractDomain(recent[0]); // A
+            const d1 = this.extractDomain(recent[1]); // B
+            const d2 = this.extractDomain(recent[2]); // A
+            const d3 = this.extractDomain(recent[3]); // B
+
+            if (d0 && d1 && d0 === d2 && d1 === d3 && d0 !== d1) {
+                return { type: 'domain_loop', domains: [d0, d1] };
             }
         }
 
