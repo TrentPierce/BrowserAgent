@@ -216,11 +216,12 @@ class MobileAgent {
           success = true;
           break;
                     
-        case 'wait':
+        case 'wait': {
           const driver = await this.driver.getDriver();
           await driver.pause(params.duration || 1000);
           success = true;
           break;
+        }
                     
         default:
           throw new Error(`Unknown action: ${action}`);

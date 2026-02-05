@@ -60,18 +60,20 @@ class PlatformSelectors {
 
   convertForIOS(selector, type) {
     switch (type) {
-      case 'id':
+      case 'id': {
         const idValue = selector.replace('#', '');
         return {
           strategy: 'id',
           selector: idValue
         };
-      case 'class':
+      }
+      case 'class': {
         const className = selector.replace('.', '');
         return {
           strategy: 'class name',
           selector: className
         };
+      }
       case 'xpath':
         return {
           strategy: 'xpath',
@@ -102,18 +104,20 @@ class PlatformSelectors {
 
   convertForAndroid(selector, type) {
     switch (type) {
-      case 'id':
+      case 'id': {
         const idValue = selector.replace('#', '');
         return {
           strategy: 'id',
           selector: idValue.includes(':id/') ? idValue : `${idValue}`
         };
-      case 'class':
+      }
+      case 'class': {
         const className = selector.replace('.', '');
         return {
           strategy: 'class name',
           selector: className.includes('.') ? className : `android.widget.${className}`
         };
+      }
       case 'xpath':
         return {
           strategy: 'xpath',

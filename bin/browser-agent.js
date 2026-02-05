@@ -20,7 +20,7 @@ program
     .option('-h, --headless', 'Run in headless mode')
     .action((options) => {
         console.log('Starting BrowserAgent in standalone mode...');
-        
+
         // Check if electron is available
         let electronPath;
         try {
@@ -34,16 +34,16 @@ program
             console.log('  - Library mode:   See QUICKSTART.md for examples');
             process.exit(1);
         }
-        
+
         // Spawn electron process
         const { spawn } = require('child_process');
         const path = require('path');
-        
-        const child = spawn(electronPath, [path.join(__dirname, '..')], {
+
+        const child = spawn(electronPath, [path.join(__dirname, '../main.js')], {
             stdio: 'inherit',
             windowsHide: false
         });
-        
+
         child.on('close', (code) => {
             process.exit(code);
         });
@@ -58,46 +58,46 @@ program
     .option('--host <host>', 'Host to bind to', '0.0.0.0')
     .action(async (options) => {
         console.log('Starting BrowserAgent API server...');
-        
+
         const { RestAPIServer } = require('../src/api/RestAPIServer');
         const { WebSocketServer } = require('../src/api/WebSocketServer');
-        
+
         // Create servers
         const apiServer = new RestAPIServer({
             port: parseInt(options.port),
             host: options.host
         });
-        
+
         const wsServer = new WebSocketServer({
             port: parseInt(options.wsPort)
         });
-        
+
         // Setup event handlers
         apiServer.on('started', ({ port, host }) => {
             console.log(`API Server listening on http://${host}:${port}`);
             console.log(`Health check: http://${host}:${port}/health`);
         });
-        
+
         wsServer.on('started', ({ port }) => {
             console.log(`WebSocket Server listening on ws://0.0.0.0:${port}`);
         });
-        
+
         apiServer.on('error', (error) => {
             console.error('API Server error:', error.message);
         });
-        
+
         wsServer.on('error', (error) => {
             console.error('WebSocket Server error:', error.message);
         });
-        
+
         // Start servers
         try {
             await apiServer.start();
             await wsServer.start();
-            
+
             console.log('\nBrowserAgent is ready!');
             console.log('Press Ctrl+C to stop');
-            
+
             // Graceful shutdown
             const shutdown = async () => {
                 console.log('\nShutting down gracefully...');
@@ -106,10 +106,10 @@ program
                 console.log('Goodbye!');
                 process.exit(0);
             };
-            
+
             process.on('SIGTERM', shutdown);
             process.on('SIGINT', shutdown);
-            
+
         } catch (error) {
             console.error('Failed to start servers:', error.message);
             process.exit(1);
@@ -130,28 +130,28 @@ program
         console.log(`URL: ${options.url}`);
         console.log(`Goal: ${options.goal}`);
         console.log(`Provider: ${options.provider}\n`);
-        
+
         const { createAgent } = require('../src/index');
-        
+
         try {
             const agent = await createAgent({
                 provider: options.provider,
                 apiKey: options.apiKey || process.env[`${options.provider.toUpperCase()}_API_KEY`],
                 headless: options.headless
             });
-            
+
             await agent.goto(options.url);
             console.log('Navigated to URL');
-            
+
             const result = await agent.act(options.goal);
             console.log('\nResult:', result);
-            
+
             const stats = agent.getStats();
             console.log('\nStatistics:', stats);
-            
+
             await agent.close();
             console.log('\nTest completed successfully!');
-            
+
         } catch (error) {
             console.error('Test failed:', error.message);
             process.exit(1);

@@ -15,9 +15,29 @@ const path = require('path');
 const SERVICE_NAME = 'agentic-browser';
 const ACCOUNT_NAME = 'database-encryption';
 const SALT_FILE = path.join(__dirname, '.salt');
+const FALLBACK_FILE = path.join(__dirname, '.auth_store');
 
 // In-memory fallback storage when keytar is not available
-const fallbackStorage = new Map();
+let fallbackStorage = new Map();
+
+// Load fallback storage from file
+try {
+    if (fs.existsSync(FALLBACK_FILE)) {
+        const data = fs.readFileSync(FALLBACK_FILE, 'utf8');
+        fallbackStorage = new Map(JSON.parse(data));
+        console.log('[Auth] Loaded auth store from file');
+    }
+} catch (e) {
+    console.error('[Auth] Failed to load auth store:', e.message);
+}
+
+function saveFallback() {
+    try {
+        fs.writeFileSync(FALLBACK_FILE, JSON.stringify(Array.from(fallbackStorage.entries())));
+    } catch (e) {
+        console.error('[Auth] Failed to save auth store:', e.message);
+    }
+}
 
 class AuthManager {
     constructor() {
@@ -93,6 +113,7 @@ class AuthManager {
                 await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, passwordHash);
             } else {
                 fallbackStorage.set(`${SERVICE_NAME}:${ACCOUNT_NAME}`, passwordHash);
+                saveFallback();
                 console.warn('[Auth] Using fallback storage (keytar not available)');
             }
 
@@ -119,7 +140,7 @@ class AuthManager {
             } else {
                 storedHash = fallbackStorage.get(`${SERVICE_NAME}:${ACCOUNT_NAME}`);
             }
-            
+
             if (!storedHash) {
                 return { success: false, error: 'No credentials stored' };
             }
@@ -202,6 +223,7 @@ class AuthManager {
                         await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, inputHash);
                     } else {
                         fallbackStorage.set(`${SERVICE_NAME}:${ACCOUNT_NAME}`, inputHash);
+                        saveFallback();
                     }
                     this.derivedKey = this.deriveKey(password);
                     this.isAuthenticated = true;
@@ -248,6 +270,7 @@ class AuthManager {
                 await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
             } else {
                 fallbackStorage.delete(`${SERVICE_NAME}:${ACCOUNT_NAME}`);
+                saveFallback();
             }
             // Also remove salt to start fresh
             if (fs.existsSync(SALT_FILE)) {

@@ -57,7 +57,7 @@ class DeviceManager {
             
       const devices = [];
       for (const [runtime, deviceList] of Object.entries(data.devices)) {
-        const version = runtime.match(/iOS-([\d\.]+)/)?.[1] || 'unknown';
+        const version = runtime.match(/iOS-([\d.]+)/)?.[1] || 'unknown';
                 
         for (const device of deviceList) {
           if (device.state === 'Booted' || device.isAvailable) {
@@ -97,7 +97,7 @@ class DeviceManager {
     const lines = output.split('\n');
         
     for (const line of lines) {
-      const match = line.match(/^(.+?)\s+\(([\d\.]+)\)\s+\[([A-F0-9-]+)\]/);
+      const match = line.match(/^(.+?)\s+\(([\d.]+)\)\s+\[([A-F0-9-]+)\]/);
       if (match && !line.includes('Simulator')) {
         devices.push({
           udid: match[3],

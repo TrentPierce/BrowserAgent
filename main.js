@@ -42,20 +42,26 @@ async function initializeApp() {
     // Check if database is available
     if (!databaseAvailable) {
         console.warn('[Main] Running without database support. Some features will be unavailable.');
-        dialog.showMessageBox({
-            type: 'warning',
-            title: 'Limited Mode',
-            message: 'Database not available',
-            detail: 'Running in limited mode without persistent storage. Install better-sqlite3 for full functionality.'
-        });
-        
+
         // Initialize without database
         authManager = new AuthManager();
         contextManager = new ContextManager();
         learningEngine = new LearningEngine();
         isAuthenticated = true;
         isInitializing = false;
+
+        // Create window first, then show warning (dialog needs a window to display properly)
         createWindow();
+
+        // Show warning after window is created (non-blocking)
+        setImmediate(() => {
+            dialog.showMessageBox(mainWindow, {
+                type: 'warning',
+                title: 'Limited Mode',
+                message: 'Database not available',
+                detail: 'Running in limited mode without persistent storage. Install better-sqlite3 for full functionality.'
+            }).catch(err => console.warn('[Main] Dialog error:', err.message));
+        });
         return;
     }
 
@@ -126,7 +132,7 @@ async function initializeDatabase(password) {
         learningEngine = new LearningEngine();
         return;
     }
-    
+
     database = new SecureDatabase();
     database.initialize(password);
     contextManager = new ContextManager(database);
@@ -138,8 +144,8 @@ async function promptForNewPassword() {
     return new Promise((resolve) => {
         const inputWindow = new BrowserWindow({
             width: 500,
-            height: 450,
-            resizable: false,
+            height: 750, // Increased height to fit all content
+            resizable: true, // Allow resizing just in case
             minimizable: false,
             maximizable: false,
             closable: true,
@@ -195,8 +201,8 @@ async function promptForPassword() {
     return new Promise((resolve) => {
         const inputWindow = new BrowserWindow({
             width: 500,
-            height: 380,
-            resizable: false,
+            height: 550, // Increased height to fit content
+            resizable: true, // Allow resizing
             minimizable: false,
             maximizable: false,
             closable: true,
@@ -253,6 +259,7 @@ function createWindow() {
         width: 1400,
         height: 900,
         backgroundColor: '#1e1e2e',
+        show: true, // Ensure window is visible immediately
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -263,6 +270,11 @@ function createWindow() {
     });
 
     mainWindow.loadFile('index.html');
+
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
+        mainWindow.focus();
+    });
 
     // Cleanup on close
     mainWindow.on('closed', () => {
@@ -299,8 +311,9 @@ app.on('activate', () => {
 ipcMain.on('start-agent', (event, { goal, webContentsId }) => {
     console.log(`[Main] Starting agent for goal: "${goal}"`);
 
-    if (!isAuthenticated || !database) {
-        event.sender.send('agent-log', '❌ Error: Database not initialized.');
+    // Check if we can proceed (either db initialized OR in limited mode)
+    if (!isAuthenticated) {
+        event.sender.send('agent-log', '❌ Error: Not authenticated.');
         event.sender.send('agent-stopped');
         return;
     }
@@ -338,84 +351,43 @@ ipcMain.on('stop-agent', (event) => {
     event.sender.send('agent-stopped');
 });
 
-// --- Chat IPC Handlers ---
-
-ipcMain.on('chat-user-message', (event, data) => {
-    // data is { message: string, tabId: string }
-    const messageText = typeof data === 'string' ? data : (data.message || '');
-    console.log(`[Main] Chat message from user: ${messageText}`);
-
-    if (activeAgent && messageText) {
-        activeAgent.handleUserResponse(messageText);
+// Chat handlers
+ipcMain.on('chat-user-message', (event, { message, tabId }) => {
+    if (contextManager) {
+        contextManager.addChatMessage('user', message);
     }
+
+    // In a real implementation, this would trigger an agent response
+    // For now, allow the UI to simply display it
 });
 
 ipcMain.on('chat-search', (event, query) => {
-    console.log(`[Main] Chat search: ${query}`);
-
-    if (activeAgent) {
-        const results = activeAgent.searchChatHistory(query);
+    if (contextManager) {
+        const results = contextManager.searchChatHistory(query);
         event.sender.send('chat-search-results', results);
+    } else {
+        event.sender.send('chat-search-results', []);
     }
 });
 
-// --- Agent Event Forwarding ---
-
-// Forward agent questions to UI
-ipcMain.on('agent-question', (event, questionData) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('agent-question', questionData);
+ipcMain.handle('get-chat-history', () => {
+    if (contextManager) {
+        return contextManager.getChatHistory(50);
     }
+    return [];
 });
 
-// Forward chat messages to UI
-ipcMain.on('chat-message', (event, messageData) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('chat-message', messageData);
-    }
-});
-
-// --- Database Management IPC ---
-
-ipcMain.handle('get-session-stats', async () => {
-    if (!activeAgent) return null;
-    return activeAgent.getSessionStats();
-});
-
-ipcMain.handle('get-chat-history', async () => {
-    if (!activeAgent) return [];
-    return activeAgent.getChatHistory();
-});
-
-ipcMain.handle('export-learning-data', async () => {
-    if (!learningEngine) return null;
-    return learningEngine.exportLearnedData();
-});
-
-ipcMain.on('cleanup-old-data', () => {
+// Clear data handlers
+ipcMain.on('cleanup-old-data', (event) => {
     if (database) {
-        const cleaned = database.cleanupOldData(90);
-        console.log(`[Main] Cleaned up ${cleaned} old sessions`);
-    }
-});
-
-ipcMain.on('clear-all-data', () => {
-    if (database) {
-        // Clear all user data for privacy
-        database.db.exec('DELETE FROM chat_messages');
-        database.db.exec('DELETE FROM interactions');
-        database.db.exec('DELETE FROM sessions');
-        database.compactDatabase();
-        console.log('[Main] All user data cleared');
-    }
-});
-
-// Handle app exit gracefully
-app.on('before-quit', () => {
-    if (activeAgent) {
-        activeAgent.stop();
-    }
-    if (database) {
-        database.close();
+        try {
+            database.performMaintenance();
+            event.sender.send('agent-log', '✅ Database maintenance completed.');
+        } catch (error) {
+            console.error('Maintenance failed:', error);
+            event.sender.send('agent-log', '❌ Maintenance failed: ' + error.message);
+        }
+    } else {
+        event.sender.send('agent-log', '⚠️ Maintenance skipped (Database not available).');
     }
 });

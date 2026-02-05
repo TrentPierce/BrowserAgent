@@ -567,21 +567,6 @@ class BrowserbaseSessionManager extends EventEmitter {
   }
 
   /**
-   * Get session by ID
-   * @param {string} sessionId - Session ID
-   * @returns {BrowserbaseProvider|null} Session provider
-   */
-  getSession(sessionId) {
-    const sessionInfo = this.activeSessions.get(sessionId);
-    if (sessionInfo) {
-      return sessionInfo.provider;
-    }
-
-    // Check in available pool
-    return this.availableSessions.find(s => s.sessionId === sessionId) || null;
-  }
-
-  /**
    * Check if a session is valid and still active
    * @param {BrowserbaseProvider} provider - Session provider
    * @returns {Promise<boolean>} True if session is valid

@@ -48,6 +48,16 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 console.log('[Agent] *** AGENT.JS VERSION 2.0 LOADED ***');
 
+// Configuration constants
+const AGENT_CONFIG = {
+  model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+  maxElements: parseInt(process.env.AGENT_MAX_ELEMENTS, 10) || 50,
+  screenshotQuality: parseInt(process.env.AGENT_SCREENSHOT_QUALITY, 10) || 70,
+  loopDelay: parseInt(process.env.AGENT_LOOP_DELAY, 10) || 3000,
+  pageLoadTimeout: parseInt(process.env.AGENT_PAGE_LOAD_TIMEOUT, 10) || 5000,
+  apiKeyMinLength: parseInt(process.env.AGENT_API_KEY_MIN_LENGTH, 10) || 10
+};
+
 // JSON Schema for structured output (using plain strings for compatibility)
 const ACTION_SCHEMA = {
     type: "object",
@@ -88,15 +98,15 @@ class Agent {
         this.active = false;
         this.goal = "";
 
-        if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.length < 10) {
+        if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.length < AGENT_CONFIG.apiKeyMinLength) {
             this.log("⚠️ ERROR: Invalid or missing GEMINI_API_KEY in .env file.");
             this.active = false;
         }
 
-        // Initialize Gemini with current model
+        // Initialize Gemini with configurable model
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
         this.model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash"
+            model: AGENT_CONFIG.model
         });
 
         this.startTime = 0;
@@ -172,7 +182,7 @@ class Agent {
             // Capture State (DOM + Screenshot) used from the Guest
             const simplifiedDOM = await this.getSimplifiedDOM();
             const screenshot = await this.guestWebContents.capturePage();
-            const base64Image = screenshot.toJPEG(70).toString('base64'); // Reduced quality to save tokens
+            const base64Image = screenshot.toJPEG(${AGENT_CONFIG.screenshotQuality}).toString('base64'); // Configurable quality to save tokens
 
             // Think (Gemini)
             this.log("🧠 Thinking...");
@@ -187,7 +197,7 @@ class Agent {
 
             // Wait/Loop
             if (actionPlan.action !== 'done') {
-                await new Promise(r => setTimeout(r, 3000));
+                await new Promise(r => setTimeout(r, ${AGENT_CONFIG.loopDelay}));
                 this.loop();
             } else {
                 this.log("🎉 Goal achieved (according to agent).");
@@ -209,7 +219,7 @@ class Agent {
                         resolve();
                     } else {
                         window.addEventListener('load', resolve, { once: true });
-                        setTimeout(resolve, 5000); // Timeout after 5s
+                        setTimeout(resolve, ${AGENT_CONFIG.pageLoadTimeout}); // Configurable timeout
                     }
                 });
             `);
@@ -224,7 +234,7 @@ class Agent {
         const counterStart = this.agentIdCounter;
         const script = `
         (function() {
-            const MAX_ELEMENTS = 50; // Increased for complex pages with popups
+            const MAX_ELEMENTS = ${AGENT_CONFIG.maxElements}; // Configurable max elements
             const elements = document.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="option"], [onclick], label, h1, h2, h3, h4, p, span, .modal, .popup, .overlay, .dialog, [aria-label*="close" i], [class*="close" i], [class*="dismiss" i], [class*="accept" i]');
             const lines = [];
             const seenText = new Set();

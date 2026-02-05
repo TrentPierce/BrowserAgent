@@ -245,7 +245,7 @@ class BrowserAgentCore extends EventEmitter {
       );
             
       let node;
-      while (node = walker.nextNode()) {
+      while ((node = walker.nextNode()) !== null) {
         if (node.offsetWidth > 0 && node.offsetHeight > 0) {
           const rect = node.getBoundingClientRect();
           elements.push({

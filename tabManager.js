@@ -8,55 +8,28 @@ class TabManager {
     }
 
     init() {
-        this.createTabBar();
-        this.createWebviewContainer();
+        this.bindDOM();
         // Create first tab
         this.createTab('https://www.google.com');
     }
 
-    createTabBar() {
-        // Create tab bar
-        this.tabBar = document.createElement('div');
-        this.tabBar.id = 'tab-bar';
-        this.tabBar.className = 'tab-bar';
+    bindDOM() {
+        // Use existing elements from index.html
+        this.tabBar = document.querySelector('.tab-bar');
+        this.tabsContainer = document.getElementById('tabsContainer');
+        this.webviewContainer = document.getElementById('webviewContainer');
 
-        // Create new tab button
-        const newTabBtn = document.createElement('button');
-        newTabBtn.className = 'new-tab-btn';
-        newTabBtn.innerHTML = '+';
-        newTabBtn.title = 'New Tab';
-        newTabBtn.addEventListener('click', () => {
-            this.createTab('https://www.google.com');
-        });
-
-        // Create tabs container
-        this.tabsContainer = document.createElement('div');
-        this.tabsContainer.className = 'tabs-container';
-
-        this.tabBar.appendChild(this.tabsContainer);
-        this.tabBar.appendChild(newTabBtn);
-
-        // Insert after nav bar
-        const navBar = document.getElementById('nav-bar');
-        navBar.parentNode.insertBefore(this.tabBar, navBar.nextSibling);
-    }
-
-    createWebviewContainer() {
-        this.webviewContainer = document.createElement('div');
-        this.webviewContainer.id = 'webview-container';
-        this.webviewContainer.className = 'webview-container';
-
-        // Replace existing webview or append to main-view
-        const oldWebview = document.getElementById('browser-view');
-        if (oldWebview) {
-            oldWebview.parentNode.replaceChild(this.webviewContainer, oldWebview);
-        } else {
-            const mainView = document.getElementById('main-view');
-            if (mainView) {
-                mainView.appendChild(this.webviewContainer);
-            }
+        const newTabBtn = document.getElementById('btnNewTab');
+        if (newTabBtn) {
+            newTabBtn.addEventListener('click', () => {
+                this.createTab('https://www.google.com');
+            });
         }
     }
+
+    // Deprecated methods removed/merged into bindDOM
+    createTabBar() { }
+    createWebviewContainer() { }
 
     createTab(url = 'https://www.google.com') {
         const tabId = `tab-${this.nextTabId++}`;
