@@ -8,22 +8,25 @@
  * and result aggregation for multiple concurrent analysis operations.
  * 
  * INTEGRATES WITH:
- * - ScreenshotSegmenter - Visual region analysis
- * - UIElementClassifier - Element type classification
- * - VisualDomMapper - Visual-to-DOM mapping
- * - ResultReconciliator - Multi-source result merging
+ * - Phase 1: JobQueue, ResultReconciliator
+ * - Phase 2: ScreenshotSegmenter, UIElementClassifier, VisualDomMapper
+ * - Phase 3: StateTracker, AnimationDetector, TransitionPredictor
  * 
  * FEATURES:
  * - Worker thread pool management
  * - Parallel task execution with priority scheduling
  * - Visual analysis integration (Phase 2)
+ * - Temporal analysis integration (Phase 3)
  * - Task cancellation and timeout handling
  * - Error recovery and retry mechanisms
  * - Result aggregation and reconciliation
  * - Performance monitoring and statistics
  * 
  * USAGE:
- * const orchestrator = new TaskOrchestrator({ maxWorkers: 4 });
+ * const orchestrator = new TaskOrchestrator({ 
+ *   maxWorkers: 4,
+ *   enableTemporalAnalysis: true
+ * });
  * const result = await orchestrator.executeParallelAnalysis({
  *   dom: domData,
  *   screenshot: imageData,
@@ -42,6 +45,9 @@ const { ResultReconciliator, AnalysisSource } = require('./resultReconciliator')
 const { ScreenshotSegmenter } = require('./screenshotSegmenter');
 const { UIElementClassifier } = require('./uiElementClassifier');
 const { VisualDomMapper } = require('./visualDomMapper');
+const { StateTracker, ChangeType } = require('./stateTracker');
+const { AnimationDetector, LoadingState } = require('./animationDetector');
+const { TransitionPredictor } = require('./transitionPredictor');
 
 /**
  * Task types
@@ -53,6 +59,9 @@ const TaskType = {
     VISUAL_SEGMENTATION: 'visual_segmentation',
     ELEMENT_CLASSIFICATION: 'element_classification',
     VISUAL_MAPPING: 'visual_mapping',
+    STATE_TRACKING: 'state_tracking',
+    ANIMATION_DETECTION: 'animation_detection',
+    TRANSITION_PREDICTION: 'transition_prediction',
     PATTERN_MATCHING: 'pattern_matching',
     LEARNING_INFERENCE: 'learning_inference',
     COMBINED_ANALYSIS: 'combined_analysis'
@@ -77,11 +86,6 @@ const TaskStatus = {
  * @private
  */
 class WorkerPool {
-    /**
-     * Create a worker pool
-     * @param {number} maxWorkers - Maximum number of workers
-     * @param {string} workerScript - Path to worker script
-     */
     constructor(maxWorkers, workerScript) {
         this.maxWorkers = maxWorkers;
         this.workerScript = workerScript;
@@ -92,9 +96,6 @@ class WorkerPool {
         console.log(`[WorkerPool] Initializing pool with ${maxWorkers} workers`);
     }
     
-    /**
-     * Initialize worker pool
-     */
     initialize() {
         for (let i = 0; i < this.maxWorkers; i++) {
             const worker = this.createWorker();
@@ -105,11 +106,6 @@ class WorkerPool {
         console.log(`[WorkerPool] Pool initialized with ${this.workers.length} workers`);
     }
     
-    /**
-     * Create a new worker
-     * @private
-     * @returns {Worker} Worker instance
-     */
     createWorker() {
         const worker = {
             id: crypto.randomUUID(),
@@ -120,10 +116,6 @@ class WorkerPool {
         return worker;
     }
     
-    /**
-     * Get an available worker
-     * @returns {Object|null} Available worker or null
-     */
     getAvailableWorker() {
         if (this.availableWorkers.length === 0) {
             return null;
@@ -136,10 +128,6 @@ class WorkerPool {
         return worker;
     }
     
-    /**
-     * Release a worker back to the pool
-     * @param {Object} worker - Worker to release
-     */
     releaseWorker(worker) {
         worker.isAvailable = true;
         worker.currentTask = null;
@@ -147,10 +135,6 @@ class WorkerPool {
         this.availableWorkers.push(worker);
     }
     
-    /**
-     * Get pool statistics
-     * @returns {Object} Pool stats
-     */
     getStats() {
         return {
             totalWorkers: this.workers.length,
@@ -159,9 +143,6 @@ class WorkerPool {
         };
     }
     
-    /**
-     * Terminate all workers
-     */
     terminate() {
         console.log('[WorkerPool] Terminating all workers');
         
@@ -191,6 +172,7 @@ class TaskOrchestrator extends EventEmitter {
      * @param {number} [options.taskTimeout=30000] - Task timeout in milliseconds
      * @param {boolean} [options.enableWorkers=false] - Enable worker threads (experimental)
      * @param {boolean} [options.enableVisualAnalysis=true] - Enable Phase 2 visual analysis
+     * @param {boolean} [options.enableTemporalAnalysis=true] - Enable Phase 3 temporal analysis
      * @param {Object} [options.reconciliatorOptions] - Options for result reconciliator
      */
     constructor(options = {}) {
@@ -201,6 +183,7 @@ class TaskOrchestrator extends EventEmitter {
         this.taskTimeout = options.taskTimeout || 30000;
         this.enableWorkers = options.enableWorkers || false;
         this.enableVisualAnalysis = options.enableVisualAnalysis !== undefined ? options.enableVisualAnalysis : true;
+        this.enableTemporalAnalysis = options.enableTemporalAnalysis !== undefined ? options.enableTemporalAnalysis : true;
         
         // Initialize job queue
         this.jobQueue = new JobQueue({
@@ -218,6 +201,14 @@ class TaskOrchestrator extends EventEmitter {
             this.uiElementClassifier = new UIElementClassifier();
             this.visualDomMapper = new VisualDomMapper();
             console.log('[TaskOrchestrator] Visual analysis components enabled');
+        }
+        
+        // Initialize Phase 3 temporal analysis components
+        if (this.enableTemporalAnalysis) {
+            this.stateTracker = new StateTracker({ maxHistory: 50 });
+            this.animationDetector = new AnimationDetector();
+            this.transitionPredictor = new TransitionPredictor();
+            console.log('[TaskOrchestrator] Temporal analysis components enabled');
         }
         
         // Initialize worker pool if enabled
@@ -263,6 +254,39 @@ class TaskOrchestrator extends EventEmitter {
         this.jobQueue.on('job:cancelled', ({ jobId }) => {
             this.emit('task:cancelled', { taskId: jobId });
         });
+        
+        // Phase 3 temporal event listeners
+        if (this.enableTemporalAnalysis) {
+            this.setupTemporalEventListeners();
+        }
+    }
+    
+    /**
+     * Set up event listeners for temporal components
+     * @private
+     */
+    setupTemporalEventListeners() {
+        if (this.stateTracker) {
+            this.stateTracker.on('changes:detected', (changes) => {
+                this.emit('temporal:stateChanged', changes);
+            });
+        }
+        
+        if (this.animationDetector) {
+            this.animationDetector.on('loading:started', () => {
+                this.emit('temporal:loadingStarted');
+            });
+            
+            this.animationDetector.on('loading:completed', ({ duration }) => {
+                this.emit('temporal:loadingCompleted', { duration });
+            });
+        }
+        
+        if (this.transitionPredictor) {
+            this.transitionPredictor.on('prediction:made', (prediction) => {
+                this.emit('temporal:predictionMade', prediction);
+            });
+        }
     }
     
     /**
@@ -270,6 +294,7 @@ class TaskOrchestrator extends EventEmitter {
      * @param {Object} analysisData - Data for analysis
      * @param {string} analysisData.dom - Simplified DOM string
      * @param {string} analysisData.screenshot - Base64 screenshot
+     * @param {string} analysisData.url - Current URL
      * @param {string} analysisData.goal - User goal
      * @param {Object} analysisData.context - Additional context
      * @param {Object} [analysisData.viewport] - Viewport metadata
@@ -278,6 +303,7 @@ class TaskOrchestrator extends EventEmitter {
      * @param {Array<string>} [options.analysisTypes] - Types of analysis to run
      * @param {string} [options.priority] - Task priority
      * @param {boolean} [options.useVisualAnalysis] - Use Phase 2 visual analysis
+     * @param {boolean} [options.useTemporalAnalysis] - Use Phase 3 temporal analysis
      * @returns {Promise<Object>} Reconciled analysis result
      */
     async executeParallelAnalysis(analysisData, options = {}) {
@@ -285,6 +311,20 @@ class TaskOrchestrator extends EventEmitter {
         const startTime = Date.now();
         
         console.log(`[TaskOrchestrator] Starting parallel analysis ${analysisId}`);
+        
+        // Phase 3: Capture current state if temporal analysis is enabled
+        const useTemporal = options.useTemporalAnalysis !== undefined 
+            ? options.useTemporalAnalysis 
+            : this.enableTemporalAnalysis;
+        
+        if (useTemporal && this.stateTracker) {
+            this.stateTracker.captureState({
+                dom: analysisData.dom,
+                screenshot: analysisData.screenshot,
+                url: analysisData.url,
+                viewport: analysisData.viewport
+            });
+        }
         
         // Default analysis types
         let analysisTypes = options.analysisTypes || [
@@ -304,9 +344,18 @@ class TaskOrchestrator extends EventEmitter {
                 ...analysisTypes
             ];
             
-            // Add visual mapping if DOM nodes are available
             if (analysisData.domNodes && analysisData.domNodes.length > 0) {
                 analysisTypes.push(TaskType.VISUAL_MAPPING);
+            }
+        }
+        
+        // Add Phase 3 temporal analysis tasks if enabled
+        if (useTemporal) {
+            analysisTypes.push(TaskType.STATE_TRACKING);
+            analysisTypes.push(TaskType.ANIMATION_DETECTION);
+            
+            if (this.transitionPredictor && this.stateTracker.getCurrentState()) {
+                analysisTypes.push(TaskType.TRANSITION_PREDICTION);
             }
         }
         
@@ -414,21 +463,11 @@ class TaskOrchestrator extends EventEmitter {
         }
     }
     
-    /**
-     * Create an analysis task
-     * @private
-     * @param {string} taskType - Type of analysis task
-     * @param {Object} data - Analysis data
-     * @param {Object} options - Task options
-     * @returns {Promise<string>} Task ID
-     */
     async createAnalysisTask(taskType, data, options = {}) {
         this.stats.totalTasks++;
         
-        // Create task function based on type
         const taskFn = this.createTaskFunction(taskType, data);
         
-        // Add task to job queue
         const taskId = this.jobQueue.addJob(
             taskFn,
             [],
@@ -442,7 +481,6 @@ class TaskOrchestrator extends EventEmitter {
             }
         );
         
-        // Track task
         this.tasks.set(taskId, {
             id: taskId,
             type: taskType,
@@ -455,50 +493,35 @@ class TaskOrchestrator extends EventEmitter {
         return taskId;
     }
     
-    /**
-     * Create task function for specific analysis type
-     * @private
-     * @param {string} taskType - Task type
-     * @param {Object} data - Analysis data
-     * @returns {Function} Async task function
-     */
     createTaskFunction(taskType, data) {
         switch (taskType) {
             case TaskType.DOM_ANALYSIS:
                 return async () => this.executeDomAnalysis(data);
-                
             case TaskType.VISION_ANALYSIS:
                 return async () => this.executeVisionAnalysis(data);
-                
             case TaskType.VISUAL_SEGMENTATION:
                 return async () => this.executeVisualSegmentation(data);
-                
             case TaskType.ELEMENT_CLASSIFICATION:
                 return async () => this.executeElementClassification(data);
-                
             case TaskType.VISUAL_MAPPING:
                 return async () => this.executeVisualMapping(data);
-                
+            case TaskType.STATE_TRACKING:
+                return async () => this.executeStateTracking(data);
+            case TaskType.ANIMATION_DETECTION:
+                return async () => this.executeAnimationDetection(data);
+            case TaskType.TRANSITION_PREDICTION:
+                return async () => this.executeTransitionPrediction(data);
             case TaskType.PATTERN_MATCHING:
                 return async () => this.executePatternMatching(data);
-                
             case TaskType.LEARNING_INFERENCE:
                 return async () => this.executeLearningInference(data);
-                
             default:
                 throw new Error(`Unknown task type: ${taskType}`);
         }
     }
     
-    /**
-     * Execute DOM analysis
-     * @private
-     * @param {Object} data - Analysis data
-     * @returns {Promise<Object>} Analysis result
-     */
     async executeDomAnalysis(data) {
         console.log('[TaskOrchestrator] Executing DOM analysis');
-        
         await this.simulateWork(500);
         
         const elementCount = (data.dom.match(/data-agent-id/g) || []).length;
@@ -522,27 +545,13 @@ class TaskOrchestrator extends EventEmitter {
         
         return {
             source: AnalysisSource.DOM,
-            action: action,
-            selector: selector,
-            confidence: confidence,
-            reason: reason,
-            metadata: {
-                elementCount: elementCount,
-                hasPopups: hasPopups,
-                hasDecoys: hasDecoys
-            }
+            action, selector, confidence, reason,
+            metadata: { elementCount, hasPopups, hasDecoys }
         };
     }
     
-    /**
-     * Execute vision analysis
-     * @private
-     * @param {Object} data - Analysis data
-     * @returns {Promise<Object>} Analysis result
-     */
     async executeVisionAnalysis(data) {
         console.log('[TaskOrchestrator] Executing vision analysis');
-        
         await this.simulateWork(800);
         
         return {
@@ -550,18 +559,10 @@ class TaskOrchestrator extends EventEmitter {
             action: 'scroll',
             confidence: 0.7,
             reason: 'Vision analysis suggests scrolling',
-            metadata: {
-                hasScreenshot: !!data.screenshot
-            }
+            metadata: { hasScreenshot: !!data.screenshot }
         };
     }
     
-    /**
-     * Execute visual segmentation (Phase 2)
-     * @private
-     * @param {Object} data - Analysis data
-     * @returns {Promise<Object>} Segmentation result
-     */
     async executeVisualSegmentation(data) {
         if (!this.screenshotSegmenter || !data.screenshot || !data.viewport) {
             throw new Error('Visual segmentation requires screenshot and viewport data');
@@ -579,7 +580,6 @@ class TaskOrchestrator extends EventEmitter {
             }
         );
         
-        // Convert segmentation to action recommendation
         const action = this.segmentationToAction(segmentation, data.goal);
         
         return {
@@ -596,55 +596,24 @@ class TaskOrchestrator extends EventEmitter {
         };
     }
     
-    /**
-     * Convert segmentation results to action recommendation
-     * @private
-     * @param {Object} segmentation - Segmentation results
-     * @param {string} goal - User goal
-     * @returns {Object} Action recommendation
-     */
     segmentationToAction(segmentation, goal) {
         const goalLower = goal.toLowerCase();
         
-        // Check for modal/popup regions
         const hasModal = segmentation.regions.some(r => r.type === 'modal' || r.type === 'popup');
         if (hasModal) {
-            return {
-                action: 'click',
-                selector: null,
-                confidence: 0.8,
-                reason: 'Modal detected, should close before proceeding'
-            };
+            return { action: 'click', selector: null, confidence: 0.8, reason: 'Modal detected, should close before proceeding' };
         }
         
-        // Check for form areas if goal involves form submission
         if (goalLower.includes('form') || goalLower.includes('submit') || goalLower.includes('fill')) {
             const hasForm = segmentation.functionalAreas.some(a => a.type === 'form');
             if (hasForm) {
-                return {
-                    action: 'type',
-                    selector: null,
-                    confidence: 0.75,
-                    reason: 'Form area detected in content region'
-                };
+                return { action: 'type', selector: null, confidence: 0.75, reason: 'Form area detected in content region' };
             }
         }
         
-        // Default to scrolling if content is extensive
-        return {
-            action: 'scroll',
-            selector: null,
-            confidence: 0.6,
-            reason: 'Continue exploring page content'
-        };
+        return { action: 'scroll', selector: null, confidence: 0.6, reason: 'Continue exploring page content' };
     }
     
-    /**
-     * Execute element classification (Phase 2)
-     * @private
-     * @param {Object} data - Analysis data
-     * @returns {Promise<Object>} Classification result
-     */
     async executeElementClassification(data) {
         if (!this.uiElementClassifier) {
             throw new Error('Element classification requires UIElementClassifier');
@@ -652,13 +621,9 @@ class TaskOrchestrator extends EventEmitter {
         
         console.log('[TaskOrchestrator] Executing element classification');
         
-        // Parse DOM to extract elements for classification
         const elements = this.extractElementsFromDom(data.dom);
-        
-        // Classify elements in batch
         const classifications = this.uiElementClassifier.classifyBatch(elements);
         
-        // Find best interactive element
         const interactive = classifications.filter(c => 
             c.interaction === 'clickable' || c.interaction === 'editable'
         ).sort((a, b) => b.confidence - a.confidence);
@@ -686,18 +651,10 @@ class TaskOrchestrator extends EventEmitter {
             action: 'wait',
             confidence: 0.5,
             reason: 'No clear interactive elements classified',
-            metadata: {
-                totalElements: elements.length
-            }
+            metadata: { totalElements: elements.length }
         };
     }
     
-    /**
-     * Extract elements from DOM string for classification
-     * @private
-     * @param {string} dom - DOM string
-     * @returns {Array} Element data
-     */
     extractElementsFromDom(dom) {
         const elements = [];
         const elementRegex = /<(\w+)([^>]*)id="(\d+)"[^>]*>([^<]*)<\/\w+>/gi;
@@ -709,40 +666,25 @@ class TaskOrchestrator extends EventEmitter {
             const id = match[3];
             const text = match[4].replace(/\[.*?\]/g, '').trim();
             
-            const element = {
+            elements.push({
                 tag: tag.toLowerCase(),
                 selector: `[data-agent-id='${id}']`,
                 text: text,
                 className: this.extractAttribute(attrs, 'class'),
                 type: this.extractAttribute(attrs, 'type'),
                 role: this.extractAttribute(attrs, 'role')
-            };
-            
-            elements.push(element);
+            });
         }
         
         return elements;
     }
     
-    /**
-     * Extract attribute value from attribute string
-     * @private
-     * @param {string} attrs - Attribute string
-     * @param {string} name - Attribute name
-     * @returns {string|null} Attribute value
-     */
     extractAttribute(attrs, name) {
         const regex = new RegExp(`${name}=["']([^"']+)["']`, 'i');
         const match = attrs.match(regex);
         return match ? match[1] : null;
     }
     
-    /**
-     * Execute visual mapping (Phase 2)
-     * @private
-     * @param {Object} data - Analysis data
-     * @returns {Promise<Object>} Mapping result
-     */
     async executeVisualMapping(data) {
         if (!this.visualDomMapper || !data.domNodes) {
             throw new Error('Visual mapping requires VisualDomMapper and DOM nodes');
@@ -750,7 +692,6 @@ class TaskOrchestrator extends EventEmitter {
         
         console.log('[TaskOrchestrator] Executing visual-DOM mapping');
         
-        // Extract visual elements from segmentation if available
         const visualElements = data.visualElements || [];
         
         const mapping = await this.visualDomMapper.mapVisualToDom({
@@ -759,7 +700,6 @@ class TaskOrchestrator extends EventEmitter {
             viewport: data.viewport
         });
         
-        // Use mapping to enhance action selection
         const bestMapping = mapping.mappings[0];
         
         if (bestMapping && bestMapping.confidence !== 'uncertain') {
@@ -769,10 +709,7 @@ class TaskOrchestrator extends EventEmitter {
                 selector: bestMapping.domNode.selector,
                 confidence: this.mapConfidenceToScore(bestMapping.confidence),
                 reason: 'Visual-DOM mapping identified target element',
-                metadata: {
-                    mapping: mapping,
-                    mappingConfidence: bestMapping.confidence
-                }
+                metadata: { mapping: mapping, mappingConfidence: bestMapping.confidence }
             };
         }
         
@@ -781,41 +718,160 @@ class TaskOrchestrator extends EventEmitter {
             action: 'wait',
             confidence: 0.4,
             reason: 'No confident visual-DOM mapping found',
+            metadata: { mapping: mapping }
+        };
+    }
+    
+    /**
+     * Execute state tracking (Phase 3)
+     * @private
+     * @param {Object} data - Analysis data
+     * @returns {Promise<Object>} State tracking result
+     */
+    async executeStateTracking(data) {
+        if (!this.stateTracker) {
+            throw new Error('State tracking requires StateTracker');
+        }
+        
+        console.log('[TaskOrchestrator] Executing state tracking');
+        
+        const changes = this.stateTracker.detectChanges();
+        
+        if (!changes) {
+            return {
+                source: AnalysisSource.HEURISTIC,
+                action: 'wait',
+                confidence: 0.7,
+                reason: 'First state captured, no changes to analyze'
+            };
+        }
+        
+        // Determine action based on detected changes
+        if (changes.changeTypes.includes(ChangeType.URL)) {
+            return {
+                source: AnalysisSource.HEURISTIC,
+                action: 'wait',
+                confidence: 0.8,
+                reason: 'URL changed, waiting for page to stabilize',
+                metadata: { changes: changes, waitTime: 2000 }
+            };
+        }
+        
+        if (changes.magnitude > 0.5) {
+            return {
+                source: AnalysisSource.HEURISTIC,
+                action: 'wait',
+                confidence: 0.75,
+                reason: 'Significant page changes detected, waiting for stability',
+                metadata: { changes: changes, waitTime: 1000 }
+            };
+        }
+        
+        return {
+            source: AnalysisSource.HEURISTIC,
+            action: 'continue',
+            confidence: 0.6,
+            reason: 'Page state stable, proceed with next action',
+            metadata: { changes: changes }
+        };
+    }
+    
+    /**
+     * Execute animation detection (Phase 3)
+     * @private
+     * @param {Object} data - Analysis data
+     * @returns {Promise<Object>} Animation detection result
+     */
+    async executeAnimationDetection(data) {
+        if (!this.animationDetector) {
+            throw new Error('Animation detection requires AnimationDetector');
+        }
+        
+        console.log('[TaskOrchestrator] Executing animation detection');
+        
+        const prevState = this.stateTracker ? this.stateTracker.getPreviousState() : null;
+        
+        const analysis = await this.animationDetector.analyzeAnimations({
+            dom: data.dom,
+            screenshot: data.screenshot,
+            previousScreenshot: prevState ? prevState.screenshot : null,
+            viewport: data.viewport
+        });
+        
+        if (analysis.shouldWait) {
+            return {
+                source: AnalysisSource.HEURISTIC,
+                action: 'wait',
+                confidence: 0.9,
+                reason: `Animations detected (${analysis.animations.length}), waiting for completion`,
+                metadata: {
+                    animations: analysis,
+                    waitTime: analysis.estimatedCompletionTime
+                }
+            };
+        }
+        
+        return {
+            source: AnalysisSource.HEURISTIC,
+            action: 'continue',
+            confidence: 0.7,
+            reason: 'No blocking animations detected',
+            metadata: { animations: analysis }
+        };
+    }
+    
+    /**
+     * Execute transition prediction (Phase 3)
+     * @private
+     * @param {Object} data - Analysis data
+     * @returns {Promise<Object>} Transition prediction result
+     */
+    async executeTransitionPrediction(data) {
+        if (!this.transitionPredictor || !this.stateTracker) {
+            throw new Error('Transition prediction requires TransitionPredictor and StateTracker');
+        }
+        
+        console.log('[TaskOrchestrator] Executing transition prediction');
+        
+        const currentState = this.stateTracker.getCurrentState();
+        
+        // Create proposed action from data
+        const proposedAction = {
+            action: data.proposedAction?.action || 'wait',
+            selector: data.proposedAction?.selector || null,
+            text: data.proposedAction?.text || null
+        };
+        
+        const prediction = this.transitionPredictor.predictTransition(
+            currentState,
+            proposedAction
+        );
+        
+        // Use prediction to adjust action timing
+        return {
+            source: AnalysisSource.LEARNING,
+            action: proposedAction.action,
+            selector: proposedAction.selector,
+            confidence: prediction.confidence,
+            reason: `Predicted ${prediction.predictedOutcome} with ${(prediction.successProbability * 100).toFixed(0)}% success rate`,
             metadata: {
-                mapping: mapping
+                prediction: prediction,
+                estimatedDuration: prediction.estimatedDuration
             }
         };
     }
     
-    /**
-     * Map confidence level to numeric score
-     * @private
-     * @param {string} confidence - Confidence level
-     * @returns {number} Numeric score
-     */
     mapConfidenceToScore(confidence) {
         const scores = {
-            'exact': 0.95,
-            'high': 0.85,
-            'medium': 0.7,
-            'low': 0.5,
-            'uncertain': 0.3
+            'exact': 0.95, 'high': 0.85, 'medium': 0.7,
+            'low': 0.5, 'uncertain': 0.3
         };
-        
         return scores[confidence] || 0.5;
     }
     
-    /**
-     * Execute pattern matching
-     * @private
-     * @param {Object} data - Analysis data
-     * @returns {Promise<Object>} Analysis result
-     */
     async executePatternMatching(data) {
         console.log('[TaskOrchestrator] Executing pattern matching');
-        
         await this.simulateWork(500);
-        
         return {
             source: AnalysisSource.PATTERN,
             action: 'click',
@@ -825,17 +881,9 @@ class TaskOrchestrator extends EventEmitter {
         };
     }
     
-    /**
-     * Execute learning inference
-     * @private
-     * @param {Object} data - Analysis data
-     * @returns {Promise<Object>} Analysis result
-     */
     async executeLearningInference(data) {
         console.log('[TaskOrchestrator] Executing learning inference');
-        
         await this.simulateWork(800);
-        
         return {
             source: AnalysisSource.LEARNING,
             action: 'type',
@@ -845,37 +893,15 @@ class TaskOrchestrator extends EventEmitter {
         };
     }
     
-    /**
-     * Simulate work for testing
-     * @private
-     * @param {number} duration - Duration in milliseconds
-     * @returns {Promise<void>}
-     */
     async simulateWork(duration) {
         return new Promise(resolve => setTimeout(resolve, duration));
     }
     
-    /**
-     * Cancel an active analysis
-     * @param {string} analysisId - Analysis ID to cancel
-     * @returns {boolean} True if cancelled successfully
-     */
     cancelAnalysis(analysisId) {
         const analysis = this.activeAnalyses.get(analysisId);
+        if (!analysis) return false;
+        if (analysis.status !== 'running') return false;
         
-        if (!analysis) {
-            console.warn(`[TaskOrchestrator] Analysis ${analysisId} not found`);
-            return false;
-        }
-        
-        if (analysis.status !== 'running') {
-            console.warn(`[TaskOrchestrator] Analysis ${analysisId} is not running`);
-            return false;
-        }
-        
-        console.log(`[TaskOrchestrator] Cancelling analysis ${analysisId}`);
-        
-        // Cancel all associated tasks
         let cancelledCount = 0;
         for (const taskId of analysis.taskIds) {
             if (this.jobQueue.cancelJob(taskId)) {
@@ -885,80 +911,40 @@ class TaskOrchestrator extends EventEmitter {
         
         analysis.status = 'cancelled';
         this.stats.cancelledTasks += cancelledCount;
-        
         this.emit('analysis:cancelled', { analysisId, cancelledTasks: cancelledCount });
         
         return true;
     }
     
-    /**
-     * Cancel a specific task
-     * @param {string} taskId - Task ID to cancel
-     * @returns {boolean} True if cancelled successfully
-     */
     cancelTask(taskId) {
         const task = this.tasks.get(taskId);
-        
-        if (!task) {
-            console.warn(`[TaskOrchestrator] Task ${taskId} not found`);
-            return false;
-        }
+        if (!task) return false;
         
         const result = this.jobQueue.cancelJob(taskId);
-        
         if (result) {
             task.status = TaskStatus.CANCELLED;
             this.stats.cancelledTasks++;
         }
-        
         return result;
     }
     
-    /**
-     * Get task status
-     * @param {string} taskId - Task ID
-     * @returns {Object|null} Task status
-     */
     getTaskStatus(taskId) {
         const jobStatus = this.jobQueue.getJobStatus(taskId);
         const task = this.tasks.get(taskId);
         
-        if (!jobStatus || !task) {
-            return null;
-        }
+        if (!jobStatus || !task) return null;
         
-        return {
-            ...jobStatus,
-            type: task.type
-        };
+        return { ...jobStatus, type: task.type };
     }
     
-    /**
-     * Get analysis status
-     * @param {string} analysisId - Analysis ID
-     * @returns {Object|null} Analysis status
-     */
     getAnalysisStatus(analysisId) {
         const analysis = this.activeAnalyses.get(analysisId);
-        
-        if (!analysis) {
-            return null;
-        }
+        if (!analysis) return null;
         
         const taskStatuses = analysis.taskIds.map(taskId => this.getTaskStatus(taskId));
-        
-        return {
-            ...analysis,
-            tasks: taskStatuses
-        };
+        return { ...analysis, tasks: taskStatuses };
     }
     
-    /**
-     * Update statistics
-     * @private
-     * @param {number} duration - Task duration
-     * @param {boolean} success - Whether task succeeded
-     */
     updateStats(duration, success) {
         if (success) {
             this.stats.completedTasks++;
@@ -971,20 +957,21 @@ class TaskOrchestrator extends EventEmitter {
             this.stats.totalExecutionTime / (this.stats.completedTasks + this.stats.failedTasks);
     }
     
-    /**
-     * Get orchestrator statistics
-     * @returns {Object} Statistics
-     */
     getStats() {
         const queueStats = this.jobQueue.getStats();
         const reconciliatorStats = this.reconciliator.getStats();
         const workerStats = this.workerPool ? this.workerPool.getStats() : null;
         
-        // Get Phase 2 component stats if enabled
         const visualStats = this.enableVisualAnalysis ? {
             segmenter: this.screenshotSegmenter ? this.screenshotSegmenter.getStats() : null,
             classifier: this.uiElementClassifier ? this.uiElementClassifier.getStats() : null,
             mapper: this.visualDomMapper ? this.visualDomMapper.getStats() : null
+        } : null;
+        
+        const temporalStats = this.enableTemporalAnalysis ? {
+            stateTracker: this.stateTracker ? this.stateTracker.getStats() : null,
+            animationDetector: this.animationDetector ? this.animationDetector.getStats() : null,
+            transitionPredictor: this.transitionPredictor ? this.transitionPredictor.getStats() : null
         } : null;
         
         return {
@@ -992,35 +979,28 @@ class TaskOrchestrator extends EventEmitter {
                 ...this.stats,
                 activeAnalyses: this.activeAnalyses.size,
                 activeTasks: this.tasks.size,
-                visualAnalysisEnabled: this.enableVisualAnalysis
+                visualAnalysisEnabled: this.enableVisualAnalysis,
+                temporalAnalysisEnabled: this.enableTemporalAnalysis
             },
             queue: queueStats,
             reconciliator: reconciliatorStats,
             workers: workerStats,
-            visual: visualStats
+            visual: visualStats,
+            temporal: temporalStats
         };
     }
     
-    /**
-     * Cleanup old completed analyses and tasks
-     * @param {number} maxAge - Maximum age in milliseconds
-     * @returns {number} Number of items cleaned up
-     */
     cleanup(maxAge = 3600000) {
         const now = Date.now();
         let count = 0;
         
-        // Cleanup old analyses
         for (const [analysisId, analysis] of this.activeAnalyses.entries()) {
-            if (analysis.status !== 'running' && 
-                analysis.startTime && 
-                (now - analysis.startTime) > maxAge) {
+            if (analysis.status !== 'running' && analysis.startTime && (now - analysis.startTime) > maxAge) {
                 this.activeAnalyses.delete(analysisId);
                 count++;
             }
         }
         
-        // Cleanup old tasks
         for (const [taskId, task] of this.tasks.entries()) {
             if (task.createdAt && (now - task.createdAt) > maxAge) {
                 this.tasks.delete(taskId);
@@ -1028,57 +1008,44 @@ class TaskOrchestrator extends EventEmitter {
             }
         }
         
-        // Cleanup job queue
         count += this.jobQueue.cleanup(maxAge);
         
-        // Cleanup Phase 2 components
         if (this.enableVisualAnalysis) {
-            if (this.screenshotSegmenter) {
-                this.screenshotSegmenter.clearCache();
-            }
-            if (this.visualDomMapper) {
-                this.visualDomMapper.clearCache();
-            }
+            if (this.screenshotSegmenter) this.screenshotSegmenter.clearCache();
+            if (this.visualDomMapper) this.visualDomMapper.clearCache();
+        }
+        
+        if (this.enableTemporalAnalysis) {
+            if (this.stateTracker) this.stateTracker.clearHistory(10);
+            if (this.animationDetector) this.animationDetector.clearHistory();
         }
         
         if (count > 0) {
-            console.log(`[TaskOrchestrator] Cleaned up ${count} old items`);\n        }
+            console.log(`[TaskOrchestrator] Cleaned up ${count} old items`);
+        }
         
         return count;
     }
     
-    /**
-     * Destroy orchestrator and cleanup resources
-     */
     destroy() {
         console.log('[TaskOrchestrator] Destroying orchestrator');
         
-        // Cancel all active analyses
         for (const analysisId of this.activeAnalyses.keys()) {
             this.cancelAnalysis(analysisId);
         }
         
-        // Destroy job queue
         this.jobQueue.destroy();
         
-        // Terminate worker pool
         if (this.workerPool) {
             this.workerPool.terminate();
         }
         
-        // Clear data structures
         this.tasks.clear();
         this.activeAnalyses.clear();
-        
-        // Remove listeners
         this.removeAllListeners();
         
         console.log('[TaskOrchestrator] Destroyed');
     }
 }
 
-module.exports = { 
-    TaskOrchestrator, 
-    TaskType, 
-    TaskStatus 
-};
+module.exports = { TaskOrchestrator, TaskType, TaskStatus };
