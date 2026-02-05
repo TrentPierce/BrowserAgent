@@ -7,7 +7,7 @@
 ![Koda UI](docs/images/koda_ui.png)
 
 [![Tests](https://github.com/TrentPierce/Koda/actions/workflows/ci.yml/badge.svg)](https://github.com/TrentPierce/Koda/actions)
-[![npm version](https://badge.fury.io/js/@trentpierce%2Fkoda.svg)](https://www.npmjs.com/package/@trentpierce/koda)
+
 [![License: Non-Commercial](https://img.shields.io/badge/License-Non--Commercial-red.svg)](LICENSE)
 
 **Koda** is the advanced autonomous agent for the web. It goes beyond simple scrapers by using **Computer Vision** and **Multi-LLM Intelligence** (Gemini, OpenAI, Claude) to understand, interact with, and master any web application, just like a human user.
