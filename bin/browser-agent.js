@@ -20,7 +20,33 @@ program
     .option('-h, --headless', 'Run in headless mode')
     .action((options) => {
         console.log('Starting BrowserAgent in standalone mode...');
-        require('../main.js');
+        
+        // Check if electron is available
+        let electronPath;
+        try {
+            electronPath = require('electron');
+        } catch (error) {
+            console.error('❌ Electron is not installed.');
+            console.log('\nTo use standalone mode, install electron:');
+            console.log('  npm install -D electron');
+            console.log('\nAlternatively, use one of these modes:');
+            console.log('  - Server mode:    node bin/browser-agent.js server');
+            console.log('  - Library mode:   See QUICKSTART.md for examples');
+            process.exit(1);
+        }
+        
+        // Spawn electron process
+        const { spawn } = require('child_process');
+        const path = require('path');
+        
+        const child = spawn(electronPath, [path.join(__dirname, '..')], {
+            stdio: 'inherit',
+            windowsHide: false
+        });
+        
+        child.on('close', (code) => {
+            process.exit(code);
+        });
     });
 
 // Server mode

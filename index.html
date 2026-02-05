@@ -1,410 +1,857 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agentic Browser - Multi-Tab</title>
+    <meta name="description" content="BrowserAgent - AI-powered browser automation for everyone">
+    <title>BrowserAgent - AI Browser Automation</title>
     <style>
+        /* ============================================
+           DESIGN SYSTEM & VARIABLES
+           ============================================ */
         :root {
-            --bg-color: #1e1e2e;
-            --sidebar-bg: #11111b;
-            --text-color: #cdd6f4;
-            --accent-color: #89b4fa;
-            --secondary-accent: #f38ba8;
-            --input-bg: #313244;
-            --border-color: #45475a;
-            --success-color: #a6e3a1;
-            --warning-color: #f9e2af;
-            --tab-active-bg: #1e1e2e;
-            --tab-inactive-bg: #181825;
+            /* Colors - Modern Professional Palette */
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #e0e7ff;
+            --secondary: #8b5cf6;
+            --accent: #06b6d4;
+            
+            /* Neutrals */
+            --bg-primary: #0f0f1a;
+            --bg-secondary: #1a1a2e;
+            --bg-tertiary: #252542;
+            --bg-elevated: #303055;
+            
+            /* Text */
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            /* Semantic */
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+            
+            /* Borders */
+            --border-subtle: rgba(255, 255, 255, 0.1);
+            --border-default: rgba(255, 255, 255, 0.15);
+            --border-focus: var(--primary);
+            
+            /* Spacing Scale */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --space-2xl: 48px;
+            
+            /* Typography */
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+            
+            /* Transitions */
+            --transition-fast: 150ms ease;
+            --transition-base: 250ms ease;
+            --transition-slow: 350ms ease;
+            
+            /* Layout */
+            --sidebar-width: 380px;
+            --sidebar-collapsed: 60px;
+            --header-height: 56px;
+        }
+
+        /* ============================================
+           BASE STYLES & RESET
+           ============================================ */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
             height: 100vh;
-            display: flex;
             overflow: hidden;
-            width: 100%;
+            line-height: 1.5;
         }
 
-        /* Layout */
-        #sidebar {
-            width: 350px;
-            min-width: 250px;
-            max-width: 600px;
-            background-color: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
+        /* ============================================
+           LAYOUT STRUCTURE
+           ============================================ */
+        .app-container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* ============================================
+           SIDEBAR - COLLAPSIBLE
+           ============================================ */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-subtle);
             display: flex;
             flex-direction: column;
-            padding: 20px;
-            box-sizing: border-box;
+            transition: width var(--transition-base);
+            position: relative;
             z-index: 100;
-            height: 100%;
-            flex-shrink: 0;
-            position: relative;
         }
 
-        #resizer {
-            width: 4px;
-            cursor: col-resize;
-            background-color: transparent;
-            transition: background-color 0.2s;
-            z-index: 1000;
-            flex-shrink: 0;
+        .sidebar.collapsed {
+            width: var(--sidebar-collapsed);
         }
 
-        #resizer:hover,
-        #resizer.active {
-            background-color: var(--accent-color);
-        }
-
-        #main-view {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            background-color: #fff;
-            position: relative;
-            min-width: 0;
-        }
-
-        h1 {
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-            color: var(--accent-color);
+        .sidebar-header {
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--border-subtle);
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+            height: var(--header-height);
         }
 
-        .control-group {
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-weight: 700;
+            font-size: 1.125rem;
+            color: var(--text-primary);
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .sidebar-toggle {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: var(--space-sm);
+            border-radius: 6px;
+            transition: all var(--transition-fast);
+        }
+
+        .sidebar-toggle:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .sidebar.collapsed .logo-text,
+        .sidebar.collapsed .sidebar-content {
+            display: none;
+        }
+
+        /* ============================================
+           MODE SWITCHER - SIMPLE / ADVANCED
+           ============================================ */
+        .mode-switcher {
+            padding: var(--space-md);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .mode-toggle {
+            display: flex;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: var(--space-sm) var(--space-md);
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .mode-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .mode-btn:hover:not(.active) {
+            color: var(--text-primary);
+            background: var(--bg-elevated);
+        }
+
+        /* ============================================
+           SIDEBAR CONTENT
+           ============================================ */
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-md);
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-bottom: 20px;
+            gap: var(--space-lg);
         }
 
-        label {
-            font-size: 0.9rem;
+        .sidebar-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar-content::-webkit-scrollbar-thumb {
+            background: var(--bg-elevated);
+            border-radius: 3px;
+        }
+
+        /* ============================================
+           INPUT SECTION - SIMPLIFIED
+           ============================================ */
+        .input-section {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: var(--space-md);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .section-label {
+            font-size: 0.75rem;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: var(--space-sm);
         }
 
-        textarea {
-            background-color: var(--input-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 10px;
-            border-radius: 8px;
-            resize: none;
-            height: 80px;
+        .goal-input-wrapper {
+            position: relative;
+        }
+
+        .goal-input {
+            width: 100%;
+            background: var(--bg-primary);
+            border: 2px solid var(--border-default);
+            border-radius: 10px;
+            padding: var(--space-md);
+            color: var(--text-primary);
             font-family: inherit;
+            font-size: 0.9375rem;
+            resize: none;
+            min-height: 80px;
+            transition: all var(--transition-fast);
         }
 
-        textarea:focus {
-            outline: 2px solid var(--accent-color);
+        .goal-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
         }
 
-        .button-group {
+        .goal-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .input-hint {
             display: flex;
-            gap: 10px;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-top: var(--space-sm);
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
 
-        button {
-            padding: 10px 16px;
+        .shortcut-badge {
+            background: var(--bg-elevated);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.6875rem;
+        }
+
+        /* ============================================
+           ACTION BUTTONS
+           ============================================ */
+        .action-buttons {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        .btn {
+            flex: 1;
+            padding: var(--space-md);
             border: none;
-            border-radius: 6px;
+            border-radius: 10px;
+            font-size: 0.9375rem;
             font-weight: 600;
             cursor: pointer;
-            transition: opacity 0.2s;
-            flex: 1;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
         }
 
-        #btn-start {
-            background-color: var(--accent-color);
-            color: #111;
-        }
-
-        #btn-stop {
-            background-color: var(--secondary-accent);
-            color: #111;
-        }
-
-        button:disabled {
+        .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
 
-        button:hover:not(:disabled) {
-            opacity: 0.9;
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            box-shadow: var(--shadow-md);
         }
 
-        #stats-container {
-            background-color: var(--input-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 20px;
-            font-size: 0.85rem;
-            position: relative;
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg), var(--shadow-glow);
         }
 
-        #stats-container.loading::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, var(--accent-color), var(--secondary-accent), var(--accent-color));
-            background-size: 200% 100%;
-            animation: loading-bar 1.5s ease-in-out infinite;
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
         }
 
-        @keyframes loading-bar {
-            0% {
-                background-position: 200% 0;
-            }
-
-            100% {
-                background-position: -200% 0;
-            }
+        .btn-secondary {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-default);
         }
 
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--bg-primary);
+            border-color: var(--border-focus);
         }
 
-        .stat-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .stat-value {
-            font-weight: bold;
-            color: var(--accent-color);
-            font-family: 'Fira Code', monospace;
-        }
-
-        .learning-indicator {
-            background: var(--success-color);
-            color: #1e1e2e;
-            padding: 2px 8px;
+        /* ============================================
+           STATUS CARD - HUMAN FRIENDLY
+           ============================================ */
+        .status-card {
+            background: var(--bg-tertiary);
             border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: bold;
+            padding: var(--space-md);
+            border: 1px solid var(--border-subtle);
         }
 
-        #logs-container {
-            flex-grow: 1;
+        .status-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-md);
+        }
+
+        .status-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: var(--bg-elevated);
+        }
+
+        .status-indicator.active {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .status-indicator.active .status-dot {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-md);
+        }
+
+        .metric {
             display: flex;
             flex-direction: column;
-            gap: 5px;
-            margin-top: 10px;
+            gap: 2px;
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .metric-value {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+
+        /* ============================================
+           PROGRESS BAR
+           ============================================ */
+        .progress-section {
+            margin-top: var(--space-md);
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: var(--bg-elevated);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+            border-radius: 2px;
+            transition: width var(--transition-base);
+            width: 0%;
+        }
+
+        .progress-fill.animating {
+            background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 50%, var(--primary) 100%);
+            background-size: 200% 100%;
+            animation: progress-shimmer 1.5s ease-in-out infinite;
+        }
+
+        @keyframes progress-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* ============================================
+           ACTIVITY LOG - CHAT STYLE
+           ============================================ */
+        .activity-section {
+            flex: 1;
             min-height: 0;
-        }
-
-        #logs-header {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+        }
+
+        .activity-header {
+            display: flex;
             align-items: center;
-            font-size: 0.85rem;
+            justify-content: space-between;
+            margin-bottom: var(--space-sm);
+        }
+
+        .activity-title {
+            font-size: 0.75rem;
+            font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #6c7086;
-            margin-bottom: 5px;
-            flex-shrink: 0;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
         }
 
-        .logs-toggle {
+        .activity-actions {
+            display: flex;
+            gap: var(--space-xs);
+        }
+
+        .icon-btn {
             background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 2px 8px;
-            font-size: 0.7rem;
+            border: none;
+            color: var(--text-muted);
             cursor: pointer;
+            padding: 4px;
             border-radius: 4px;
-            flex: none;
+            transition: all var(--transition-fast);
+            font-size: 0.875rem;
         }
 
-        #logs {
-            flex-grow: 1;
-            background-color: #0d0d16;
-            border-radius: 8px;
-            padding: 10px;
-            font-family: 'Fira Code', monospace;
-            font-size: 0.8rem;
+        .icon-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-elevated);
+        }
+
+        .activity-log {
+            flex: 1;
             overflow-y: auto;
-            border: 1px solid var(--border-color);
-            color: #cdd6f4;
-            scroll-behavior: smooth;
+            background: var(--bg-primary);
+            border-radius: 10px;
+            padding: var(--space-md);
+            font-size: 0.8125rem;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .activity-log::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .activity-log::-webkit-scrollbar-thumb {
+            background: var(--bg-elevated);
+            border-radius: 3px;
         }
 
         .log-entry {
-            margin-bottom: 6px;
-            padding-bottom: 4px;
-            border-bottom: 1px solid #1e1e2e;
-            word-wrap: break-word;
+            margin-bottom: var(--space-md);
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--border-subtle);
+            animation: fade-in 0.3s ease;
         }
 
-        .log-entry.user {
-            color: var(--accent-color);
-            font-weight: bold;
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        .log-entry.agent {
-            color: var(--success-color);
+        .log-entry:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
         }
 
-        .log-entry.system {
-            color: #6c7086;
-            font-style: italic;
-        }
-
-        .chat-input-sidebar {
-            margin-top: 15px;
+        .log-header {
             display: flex;
-            gap: 8px;
-            background-color: var(--input-bg);
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
+            align-items: center;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-xs);
         }
 
-        .chat-input-sidebar input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: var(--text-color);
-            outline: none;
-            font-family: inherit;
-            font-size: 0.9rem;
-        }
-
-        .chat-input-sidebar button {
-            flex: none;
-            width: 30px;
-            height: 30px;
-            padding: 0;
-            background-color: var(--accent-color);
-            color: #111;
+        .log-avatar {
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 0.75rem;
         }
 
-        .log-timestamp {
-            color: #6c7086;
-            margin-right: 8px;
+        .log-avatar.user {
+            background: var(--primary-light);
+            color: var(--primary);
         }
 
-        /* Right Panel - Browser View */
-        /* Moved to body layout classes above */
+        .log-avatar.agent {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+        }
 
-        #nav-bar {
-            height: 50px;
-            background-color: var(--bg-color);
+        .log-avatar.system {
+            background: var(--bg-elevated);
+            color: var(--text-muted);
+        }
+
+        .log-author {
+            font-weight: 600;
+            font-size: 0.8125rem;
+        }
+
+        .log-time {
+            font-size: 0.6875rem;
+            color: var(--text-muted);
+            margin-left: auto;
+        }
+
+        .log-message {
+            color: var(--text-secondary);
+            line-height: 1.5;
+            padding-left: 32px;
+        }
+
+        .log-message strong {
+            color: var(--text-primary);
+        }
+
+        /* ============================================
+           CHAT INPUT
+           ============================================ */
+        .chat-input-container {
+            margin-top: var(--space-md);
+            display: flex;
+            gap: var(--space-sm);
+            background: var(--bg-tertiary);
+            padding: var(--space-sm);
+            border-radius: 10px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.875rem;
+            outline: none;
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .chat-send-btn {
+            background: var(--primary);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
             display: flex;
             align-items: center;
-            padding: 0 10px;
-            gap: 10px;
-            border-bottom: 1px solid var(--border-color);
+            justify-content: center;
+            transition: all var(--transition-fast);
         }
 
-        #url-input {
-            flex-grow: 1;
-            background-color: var(--input-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-family: inherit;
+        .chat-send-btn:hover {
+            background: var(--primary-hover);
         }
 
-        #url-input:focus {
-            outline: 2px solid var(--accent-color);
+        /* ============================================
+           ADVANCED PANEL (Developer Tools)
+           ============================================ */
+        .advanced-panel {
+            display: none;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: var(--space-md);
+            border: 1px solid var(--border-subtle);
         }
 
-        #btn-go {
-            background-color: var(--input-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 8px 16px;
+        .advanced-panel.visible {
+            display: block;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-md);
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .panel-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .dev-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--space-md);
+        }
+
+        .dev-metric {
+            background: var(--bg-primary);
+            padding: var(--space-md);
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .dev-metric-label {
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .dev-metric-value {
+            font-family: var(--font-mono);
+            font-size: 0.9375rem;
+            color: var(--text-primary);
+        }
+
+        .dev-metric-value.success { color: var(--success); }
+        .dev-metric-value.warning { color: var(--warning); }
+        .dev-metric-value.error { color: var(--error); }
+
+        /* ============================================
+           MAIN CONTENT AREA
+           ============================================ */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            background: #ffffff;
+        }
+
+        /* ============================================
+           BROWSER HEADER
+           ============================================ */
+        .browser-header {
+            height: var(--header-height);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            padding: 0 var(--space-md);
+            gap: var(--space-md);
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: var(--space-xs);
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            width: 32px;
+            height: 32px;
             border-radius: 6px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+            font-size: 1.125rem;
         }
 
-        /* Tab Bar Styles */
+        .nav-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .address-bar {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-default);
+            border-radius: 8px;
+            padding: 0 var(--space-md);
+            height: 36px;
+            transition: all var(--transition-fast);
+        }
+
+        .address-bar:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .address-bar input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.875rem;
+            outline: none;
+        }
+
+        .address-bar input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .security-icon {
+            color: var(--success);
+            margin-right: var(--space-sm);
+        }
+
+        /* ============================================
+           TAB BAR
+           ============================================ */
         .tab-bar {
             display: flex;
-            background-color: var(--sidebar-bg);
-            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
             align-items: center;
-            padding: 0 5px;
-            height: 38px;
-            overflow-x: auto;
-            overflow-y: hidden;
-        }
-
-        .tab-bar::-webkit-scrollbar {
-            height: 3px;
-        }
-
-        .tab-bar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .tab-bar::-webkit-scrollbar-thumb {
-            background: #45475a;
-            border-radius: 2px;
+            padding: 0 var(--space-md);
+            height: 40px;
+            gap: 4px;
         }
 
         .tabs-container {
             display: flex;
             flex: 1;
-            gap: 2px;
+            gap: 4px;
             overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .tabs-container::-webkit-scrollbar {
+            display: none;
         }
 
         .tab {
             display: flex;
             align-items: center;
-            min-width: 120px;
+            gap: var(--space-sm);
+            min-width: 140px;
             max-width: 200px;
             height: 32px;
-            padding: 0 10px;
-            background: var(--tab-inactive-bg);
-            border: 1px solid var(--border-color);
+            padding: 0 var(--space-md);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
             border-bottom: none;
             border-radius: 8px 8px 0 0;
             cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.2s;
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            transition: all var(--transition-fast);
             user-select: none;
-            position: relative;
         }
 
         .tab:hover {
-            background: #313244;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
         }
 
         .tab.active {
-            background: var(--tab-active-bg);
-            border-color: var(--accent-color);
-            border-bottom: 2px solid var(--accent-color);
-        }
-
-        .tab-content {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-            overflow: hidden;
+            background: #ffffff;
+            color: var(--bg-primary);
+            border-color: #ffffff;
         }
 
         .tab-title {
@@ -415,65 +862,70 @@
         }
 
         .tab-close {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            font-size: 16px;
+            font-size: 1rem;
             line-height: 1;
-            opacity: 0.7;
-            transition: all 0.2s;
+            opacity: 0;
+            transition: all var(--transition-fast);
         }
 
-        .tab-close:hover {
-            background: var(--secondary-accent);
+        .tab:hover .tab-close {
             opacity: 1;
         }
 
+        .tab-close:hover {
+            background: var(--error);
+            color: white;
+        }
+
         .new-tab-btn {
-            width: 30px;
-            height: 30px;
-            padding: 0;
-            flex: none;
             background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            font-size: 20px;
+            border: none;
+            color: var(--text-secondary);
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-left: 5px;
+            font-size: 1.25rem;
+            transition: all var(--transition-fast);
         }
 
         .new-tab-btn:hover {
-            background: var(--input-bg);
-            border-color: var(--accent-color);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
         }
 
-        /* Webview Container */
-        /* Webview Container */
+        /* ============================================
+           WEBVIEW CONTAINER
+           ============================================ */
         .webview-container {
             flex: 1;
             position: relative;
-            background: #fff;
-            min-height: 0;
+            background: #ffffff;
             overflow: hidden;
-            /* Ensure content stays within bounds */
         }
 
         .browser-webview {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100% !important;
-            height: 100% !important;
+            width: 100%;
+            height: 100%;
             border: none;
         }
 
-        /* Question Dialog Overlay */
-        #question-overlay {
+        /* ============================================
+           DIALOG / MODAL
+           ============================================ */
+        .dialog-overlay {
             display: none;
             position: fixed;
             top: 0;
@@ -481,515 +933,758 @@
             right: 0;
             bottom: 0;
             background: rgba(0, 0, 0, 0.8);
-            z-index: 10001;
+            z-index: 1000;
             justify-content: center;
             align-items: center;
+            backdrop-filter: blur(4px);
         }
 
-        #question-overlay.active {
+        .dialog-overlay.active {
             display: flex;
         }
 
-        .question-dialog {
-            background: var(--sidebar-bg);
-            border: 2px solid var(--accent-color);
-            border-radius: 12px;
-            padding: 30px;
-            max-width: 500px;
+        .dialog {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: var(--space-xl);
+            max-width: 480px;
             width: 90%;
-            box-shadow: 0 0 30px rgba(137, 180, 250, 0.3);
+            box-shadow: var(--shadow-lg);
+            animation: dialog-appear 0.3s ease;
         }
 
-        .question-dialog h3 {
-            color: var(--accent-color);
-            margin-top: 0;
-            margin-bottom: 15px;
+        @keyframes dialog-appear {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
 
-        .question-dialog p {
-            color: var(--text-color);
-            margin-bottom: 20px;
-            line-height: 1.5;
+        .dialog-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            margin-bottom: var(--space-lg);
         }
 
-        .question-options {
+        .dialog-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .dialog-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .dialog-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .dialog-content {
+            margin-bottom: var(--space-lg);
+        }
+
+        .dialog-text {
+            font-size: 0.9375rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: var(--space-md);
+        }
+
+        .dialog-options {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: var(--space-sm);
         }
 
-        .question-option {
-            background: var(--input-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 12px 15px;
-            border-radius: 8px;
+        .dialog-option {
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: var(--space-md);
+            color: var(--text-primary);
+            font-size: 0.9375rem;
             cursor: pointer;
+            transition: all var(--transition-fast);
             text-align: left;
-            transition: all 0.2s;
-            font-size: 0.95rem;
         }
 
-        .question-option:hover {
-            background: var(--accent-color);
-            color: #111;
-            border-color: var(--accent-color);
+        .dialog-option:hover {
+            border-color: var(--primary);
+            background: var(--bg-elevated);
         }
 
-        .question-custom {
-            margin-top: 15px;
-        }
-
-        .question-custom input {
+        .dialog-input {
             width: 100%;
-            background: var(--input-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 10px;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: var(--space-md);
+            color: var(--text-primary);
             font-family: inherit;
+            font-size: 0.9375rem;
+            margin-bottom: var(--space-md);
         }
 
-        .question-custom input:focus {
-            outline: 2px solid var(--accent-color);
+        .dialog-input:focus {
+            outline: none;
+            border-color: var(--primary);
         }
 
-        /* Scrollbar styling */
-        #logs::-webkit-scrollbar {
-            width: 6px;
+        /* ============================================
+           WELCOME / EMPTY STATE
+           ============================================ */
+        .welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: var(--space-xl);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
         }
 
-        #logs::-webkit-scrollbar-track {
-            background: #000;
+        .welcome-icon {
+            font-size: 4rem;
+            margin-bottom: var(--space-lg);
         }
 
-        #logs::-webkit-scrollbar-thumb {
-            background: #333;
-            border-radius: 3px;
+        .welcome-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: var(--space-sm);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
-        /* Compact mode for logs */
-        #logs.compact .log-entry {
-            display: inline;
-            margin-right: 10px;
-            border: none;
+        .welcome-subtitle {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            max-width: 400px;
+            margin-bottom: var(--space-xl);
         }
 
-        /* Tab info display */
-        .tab-info {
-            background: var(--input-bg);
-            padding: 8px 12px;
+        .welcome-examples {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .welcome-example {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: var(--space-md);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            text-align: left;
+        }
+
+        .welcome-example:hover {
+            border-color: var(--primary);
+            background: var(--bg-elevated);
+        }
+
+        .welcome-example-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .welcome-example-text {
+            font-size: 0.9375rem;
+            color: var(--text-primary);
+        }
+
+        /* ============================================
+           TOOLTIP
+           ============================================ */
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-8px);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            padding: 6px 10px;
             border-radius: 6px;
-            margin-bottom: 15px;
-            font-size: 0.8rem;
-            color: #6c7086;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-fast);
+            z-index: 1000;
         }
 
-        .tab-info strong {
-            color: var(--accent-color);
+        .tooltip:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* ============================================
+           RESPONSIVE
+           ============================================ */
+        @media (max-width: 1200px) {
+            .sidebar {
+                width: 340px;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .sidebar {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                z-index: 200;
+                box-shadow: var(--shadow-lg);
+            }
+            
+            .sidebar.collapsed {
+                transform: translateX(-100%);
+            }
+        }
+
+        /* ============================================
+           ACCESSIBILITY
+           ============================================ */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        /* Focus visible for keyboard navigation */
+        :focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        button:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
     </style>
 </head>
-
 <body>
-
-    <!-- Left Panel -->
-    <div id="sidebar">
-        <h1>🤖 Agent Control</h1>
-
-        <div class="tab-info" id="active-tab-info">
-            Active Tab: <strong id="current-tab-id">None</strong>
-        </div>
-
-        <div class="control-group">
-            <label for="goal-input">🎯 Main Goal</label>
-            <textarea id="goal-input"
-                placeholder="State your objective (e.g. 'Go to Reddit and create an account'). Press Ctrl+Enter to start."></textarea>
-        </div>
-
-        <div class="button-group">
-            <button id="btn-start" title="Ctrl+Enter to start">Start Agent</button>
-            <button id="btn-stop" disabled title="Escape to stop">Stop</button>
-        </div>
-
-        <div style="height: 15px;"></div>
-
-        <div id="stats-container">
-            <div class="stat-item">
-                <span>⏱️ Time:</span>
-                <span id="stat-time" class="stat-value">00:00</span>
-            </div>
-            <div class="stat-item">
-                <span>🤖 API Calls:</span>
-                <span id="stat-api" class="stat-value">0</span>
-            </div>
-            <div class="stat-item">
-                <span>🪙 Tokens:</span>
-                <span id="stat-tokens" class="stat-value">0</span>
-            </div>
-            <div class="stat-item">
-                <span>📊 Success Rate:</span>
-                <span id="stat-success" class="stat-value">-</span>
-            </div>
-        </div>
-
-        <div id="logs-container">
-            <div id="logs-header">
-                <span>Agent Interaction</span>
-                <button class="logs-toggle" id="btn-toggle-logs">Compact</button>
-            </div>
-            <div id="logs">
-                <div class="log-entry system"><span class="log-timestamp">[System]</span> Ready. Enter a goal or chat
-                    below.</div>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar" role="complementary" aria-label="Agent controls">
+            <!-- Header -->
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">🤖</div>
+                    <span class="logo-text">BrowserAgent</span>
+                </div>
+                <button class="sidebar-toggle tooltip" id="sidebarToggle" data-tooltip="Toggle sidebar" aria-label="Toggle sidebar">
+                    ◀
+                </button>
             </div>
 
-            <div class="chat-input-sidebar">
-                <input type="text" id="sidebar-chat-input" placeholder="💬 Chat with agent while running...">
-                <button id="btn-sidebar-send">➤</button>
+            <!-- Mode Switcher -->
+            <div class="mode-switcher">
+                <div class="mode-toggle" role="tablist" aria-label="User mode">
+                    <button class="mode-btn active" data-mode="simple" role="tab" aria-selected="true">
+                        <span>✨</span> Simple
+                    </button>
+                    <button class="mode-btn" data-mode="advanced" role="tab" aria-selected="false">
+                        <span>⚙️</span> Advanced
+                    </button>
+                </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Resizer handle -->
-    <div id="resizer"></div>
+            <!-- Content -->
+            <div class="sidebar-content">
+                <!-- Input Section -->
+                <section class="input-section" aria-labelledby="goal-label">
+                    <div class="section-label" id="goal-label">What would you like me to do?</div>
+                    <div class="goal-input-wrapper">
+                        <textarea 
+                            class="goal-input" 
+                            id="goalInput" 
+                            placeholder="Example: Go to Amazon and find the best deals on wireless headphones"
+                            aria-label="Your goal or task"
+                            rows="3"
+                        ></textarea>
+                    </div>
+                    <div class="input-hint">
+                        <span>Press</span>
+                        <kbd class="shortcut-badge">Ctrl</kbd>
+                        <span>+</span>
+                        <kbd class="shortcut-badge">Enter</kbd>
+                        <span>to start</span>
+                    </div>
+                </section>
 
-    <!-- Right Panel -->
-    <div id="main-view">
-        <div id="nav-bar">
-            <input type="text" id="url-input" value="https://www.google.com" placeholder="Enter URL">
-            <button id="btn-go">Go</button>
-        </div>
-        <!-- Tabs and webviews will be inserted here by TabManager -->
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="btn btn-primary" id="btnStart" aria-label="Start the AI agent">
+                        <span>▶</span> Start
+                    </button>
+                    <button class="btn btn-secondary" id="btnStop" disabled aria-label="Stop the AI agent">
+                        <span>⏹</span> Stop
+                    </button>
+                </div>
 
-        <!-- Question Dialog Overlay -->
-        <div id="question-overlay">
-            <div class="question-dialog">
-                <h3>🤔 I Need Your Help</h3>
-                <p id="question-text">The agent has encountered an issue and needs guidance.</p>
-                <div class="question-options" id="question-options"></div>
-                <div class="question-custom">
-                    <input type="text" id="custom-answer" placeholder="Or type your own guidance here...">
-                    <button id="btn-custom-answer" style="width: 100%;">Send Custom Response</button>
+                <!-- Status Card -->
+                <section class="status-card" aria-labelledby="status-label">
+                    <div class="status-header">
+                        <div class="status-title" id="status-label">
+                            <span>📊</span> Status
+                        </div>
+                        <div class="status-indicator" id="statusIndicator">
+                            <span class="status-dot"></span>
+                            <span>Ready</span>
+                        </div>
+                    </div>
+                    <div class="status-metrics">
+                        <div class="metric">
+                            <span class="metric-label">Time</span>
+                            <span class="metric-value" id="statTime">--:--</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Progress</span>
+                            <span class="metric-value" id="statProgress">0%</span>
+                        </div>
+                    </div>
+                    <div class="progress-section">
+                        <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Advanced Panel (hidden by default) -->
+                <section class="advanced-panel" id="advancedPanel" aria-label="Developer tools">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>🔧</span> Developer Tools
+                        </div>
+                    </div>
+                    <div class="dev-grid">
+                        <div class="dev-metric">
+                            <div class="dev-metric-label">API Calls</div>
+                            <div class="dev-metric-value" id="devApiCalls">0</div>
+                        </div>
+                        <div class="dev-metric">
+                            <div class="dev-metric-label">Tokens Used</div>
+                            <div class="dev-metric-value" id="devTokens">0</div>
+                        </div>
+                        <div class="dev-metric">
+                            <div class="dev-metric-label">Success Rate</div>
+                            <div class="dev-metric-value success" id="devSuccessRate">-</div>
+                        </div>
+                        <div class="dev-metric">
+                            <div class="dev-metric-label">Active Tab</div>
+                            <div class="dev-metric-value" id="devActiveTab">None</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Activity Log -->
+                <section class="activity-section" aria-labelledby="activity-label">
+                    <div class="activity-header">
+                        <span class="activity-title" id="activity-label">Activity</span>
+                        <div class="activity-actions">
+                            <button class="icon-btn tooltip" id="btnClearLogs" data-tooltip="Clear logs" aria-label="Clear logs">🗑️</button>
+                            <button class="icon-btn tooltip" id="btnCompactView" data-tooltip="Toggle compact view" aria-label="Toggle compact view">📋</button>
+                        </div>
+                    </div>
+                    <div class="activity-log" id="activityLog" role="log" aria-live="polite" aria-atomic="false">
+                        <div class="log-entry">
+                            <div class="log-header">
+                                <div class="log-avatar system">🤖</div>
+                                <span class="log-author">BrowserAgent</span>
+                                <span class="log-time">Just now</span>
+                            </div>
+                            <div class="log-message">Ready to help! Enter your goal above and click Start.</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <input 
+                            type="text" 
+                            class="chat-input" 
+                            id="chatInput" 
+                            placeholder="Send a message or ask for help..."
+                            aria-label="Chat message"
+                        >
+                        <button class="chat-send-btn" id="btnSend" aria-label="Send message">
+                            ➤
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content" role="main">
+            <!-- Browser Header -->
+            <header class="browser-header">
+                <div class="nav-buttons">
+                    <button class="nav-btn tooltip" id="btnBack" data-tooltip="Go back" aria-label="Go back">←</button>
+                    <button class="nav-btn tooltip" id="btnForward" data-tooltip="Go forward" aria-label="Go forward">→</button>
+                    <button class="nav-btn tooltip" id="btnRefresh" data-tooltip="Refresh" aria-label="Refresh">↻</button>
+                </div>
+                <div class="address-bar">
+                    <span class="security-icon" aria-hidden="true">🔒</span>
+                    <input 
+                        type="text" 
+                        id="urlInput" 
+                        value="https://www.google.com" 
+                        placeholder="Enter URL or search"
+                        aria-label="Address bar"
+                    >
+                </div>
+            </header>
+
+            <!-- Tab Bar -->
+            <div class="tab-bar" role="tablist" aria-label="Browser tabs">
+                <div class="tabs-container" id="tabsContainer">
+                    <!-- Tabs will be created dynamically -->
+                </div>
+                <button class="new-tab-btn tooltip" id="btnNewTab" data-tooltip="New tab (Ctrl+T)" aria-label="New tab">+</button>
+            </div>
+
+            <!-- Webview Container -->
+            <div class="webview-container" id="webviewContainer">
+                <!-- Welcome Screen (shown initially) -->
+                <div class="welcome-screen" id="welcomeScreen">
+                    <div class="welcome-icon">🌐</div>
+                    <h1 class="welcome-title">Welcome to BrowserAgent</h1>
+                    <p class="welcome-subtitle">
+                        Your AI-powered browser assistant. Tell me what you want to do, and I'll help you navigate the web.
+                    </p>
+                    <div class="welcome-examples">
+                        <div class="welcome-example" data-goal="Find the best Italian restaurants near me on Google Maps">
+                            <div class="welcome-example-label">Example 1</div>
+                            <div class="welcome-example-text">Find the best Italian restaurants near me</div>
+                        </div>
+                        <div class="welcome-example" data-goal="Compare prices for wireless headphones on Amazon and Best Buy">
+                            <div class="welcome-example-label">Example 2</div>
+                            <div class="welcome-example-text">Compare prices for wireless headphones</div>
+                        </div>
+                        <div class="welcome-example" data-goal="Go to Reddit and find the top posts in r/technology">
+                            <div class="welcome-example-label">Example 3</div>
+                            <div class="welcome-example-text">Find top posts on Reddit technology</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Dialog Overlay -->
+        <div class="dialog-overlay" id="dialogOverlay" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+            <div class="dialog">
+                <div class="dialog-header">
+                    <div class="dialog-icon">❓</div>
+                    <div>
+                        <h2 class="dialog-title" id="dialogTitle">I Need Your Help</h2>
+                        <p class="dialog-subtitle" id="dialogSubtitle">The agent needs your input to continue</p>
+                    </div>
+                </div>
+                <div class="dialog-content">
+                    <p class="dialog-text" id="dialogText">What would you like me to do?</p>
+                    <div class="dialog-options" id="dialogOptions"></div>
+                    <input type="text" class="dialog-input" id="dialogInput" placeholder="Or type your own response...">
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" id="btnDialogCancel">Skip</button>
+                    <button class="btn btn-primary" id="btnDialogSubmit">Send Response</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="tabManager.js"></script>
     <script>
-        // Use electronAPI from preload script for security
-        const api = window.electronAPI;
+        // ============================================
+        // UI CONTROLLER
+        // ============================================
+        class UIController {
+            constructor() {
+                this.elements = {
+                    sidebar: document.getElementById('sidebar'),
+                    sidebarToggle: document.getElementById('sidebarToggle'),
+                    modeBtns: document.querySelectorAll('.mode-btn'),
+                    advancedPanel: document.getElementById('advancedPanel'),
+                    goalInput: document.getElementById('goalInput'),
+                    btnStart: document.getElementById('btnStart'),
+                    btnStop: document.getElementById('btnStop'),
+                    statusIndicator: document.getElementById('statusIndicator'),
+                    statTime: document.getElementById('statTime'),
+                    statProgress: document.getElementById('statProgress'),
+                    progressFill: document.getElementById('progressFill'),
+                    activityLog: document.getElementById('activityLog'),
+                    chatInput: document.getElementById('chatInput'),
+                    btnSend: document.getElementById('btnSend'),
+                    urlInput: document.getElementById('urlInput'),
+                    dialogOverlay: document.getElementById('dialogOverlay'),
+                    welcomeScreen: document.getElementById('welcomeScreen'),
+                    webviewContainer: document.getElementById('webviewContainer')
+                };
 
-        // Initialize Tab Manager
-        const tabManager = new TabManager();
-        tabManager.init();
+                this.state = {
+                    mode: 'simple',
+                    isRunning: false,
+                    startTime: null,
+                    timerInterval: null
+                };
 
-        const urlInput = document.getElementById('url-input');
-        const btnGo = document.getElementById('btn-go');
-        const btnStart = document.getElementById('btn-start');
-        const btnStop = document.getElementById('btn-stop');
-        const goalInput = document.getElementById('goal-input');
-        const logsDiv = document.getElementById('logs');
-        const btnToggleLogs = document.getElementById('btn-toggle-logs');
-        const currentTabDisplay = document.getElementById('current-tab-id');
-        const sidebarChatInput = document.getElementById('sidebar-chat-input');
-        const btnSidebarSend = document.getElementById('btn-sidebar-send');
-        const resizer = document.getElementById('resizer');
-        const sidebar = document.getElementById('sidebar');
-
-        // --- Resizer Logic ---
-        let isResizing = false;
-        resizer.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            resizer.classList.add('active');
-            document.body.style.cursor = 'col-resize';
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', stopResize);
-        });
-
-        function handleMouseMove(e) {
-            if (!isResizing) return;
-            const width = e.clientX;
-            if (width >= 250 && width <= 600) {
-                sidebar.style.width = width + 'px';
-            }
-        }
-
-        function stopResize() {
-            if (!isResizing) return;
-            isResizing = false;
-            resizer.classList.remove('active');
-            document.body.style.cursor = 'default';
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', stopResize);
-        }
-
-
-        // --- Navigation Logic ---
-        const navigate = () => {
-            tabManager.navigateTo(urlInput.value);
-        };
-
-        urlInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') navigate();
-        });
-
-        btnGo.addEventListener('click', navigate);
-        goalInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!btnStart.disabled) {
-                    btnStart.click();
-                } else {
-                    addLog('⚠️ Agent is already running.', null, 'system');
-                }
-            }
-        });
-
-        // --- Agent Logic ---
-
-        // Log Helper
-        const addLog = (msg, tabId = null, type = 'system') => {
-            const time = new Date().toLocaleTimeString();
-            const div = document.createElement('div');
-            div.className = `log-entry ${type}`;
-            const tabPrefix = tabId ? `[${tabId}] ` : '';
-
-            // Handle different message types
-            let content = msg;
-            if (type === 'user') content = `👤 User: ${msg}`;
-            else if (type === 'agent') content = `🤖 Agent: ${msg}`;
-
-            div.innerHTML = `<span class="log-timestamp">[${time}]</span> ${tabPrefix}${content}`;
-            logsDiv.appendChild(div);
-            requestAnimationFrame(() => {
-                logsDiv.scrollTop = logsDiv.scrollHeight;
-            });
-        };
-
-        btnStart.addEventListener('click', () => {
-            const goal = goalInput.value.trim();
-            if (!goal) {
-                addLog('⚠️ Please enter a goal first.');
-                return;
+                this.init();
             }
 
-            const activeTab = tabManager.getActiveTab();
-            if (!activeTab) {
-                addLog('⚠️ No active tab.');
-                return;
+            init() {
+                this.setupEventListeners();
+                this.setupModeSwitcher();
+                this.setupWelcomeExamples();
             }
 
-            btnStart.disabled = true;
-            btnStop.disabled = false;
-            goalInput.disabled = true;
-            document.getElementById('stats-container').classList.add('loading');
+            setupEventListeners() {
+                // Sidebar toggle
+                this.elements.sidebarToggle.addEventListener('click', () => {
+                    this.elements.sidebar.classList.toggle('collapsed');
+                    this.elements.sidebarToggle.textContent = 
+                        this.elements.sidebar.classList.contains('collapsed') ? '▶' : '◀';
+                });
 
-            addLog(`🚀 Starting agent on ${activeTab.id} with goal: "${goal}"`, activeTab.id, 'system');
-
-            // Send start signal to Main process
-            api.startAgent(goal, activeTab.webview.getWebContentsId());
-        });
-
-        btnStop.addEventListener('click', () => {
-            const activeTab = tabManager.getActiveTab();
-            if (activeTab) {
-                api.stopAgent();
-                addLog('🛑 Stopping agent...', activeTab.id, 'system');
-            }
-        });
-
-        // --- Sidebar Chat Logic ---
-        const sendSidebarMessage = () => {
-            const message = sidebarChatInput.value.trim();
-            if (!message) return;
-
-            const activeTab = tabManager.getActiveTab();
-            if (!activeTab) {
-                addLog('⚠️ No active tab to chat with.', null, 'system');
-                return;
-            }
-
-            // If agent is not running, typing a message starts it with that goal
-            if (!btnStart.disabled) {
-                addLog(message, null, 'user');
-                goalInput.value = message;
-                btnStart.click();
-            } else {
-                // Agent is running, send message as response/guidance
-                addLog(message, activeTab.id, 'user');
-                api.sendChatMessage(message, activeTab.id);
-            }
-
-            sidebarChatInput.value = '';
-        };
-
-        btnSidebarSend.addEventListener('click', sendSidebarMessage);
-        sidebarChatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendSidebarMessage();
-        });
-
-        // Toggle logs compact mode
-        btnToggleLogs.addEventListener('click', () => {
-            logsDiv.classList.toggle('compact');
-            btnToggleLogs.textContent = logsDiv.classList.contains('compact') ? 'Expanded' : 'Compact';
-        });
-
-        api.onAgentLog((message) => {
-            addLog(message, null, 'agent');
-        });
-
-        // Listen for stats
-        api.onAgentStats((stats) => {
-            document.getElementById('stat-time').textContent = stats.time;
-            document.getElementById('stat-api').textContent = stats.apiCalls;
-            document.getElementById('stat-tokens').textContent = stats.tokens;
-
-            if (stats.successRate !== undefined) {
-                const successRate = Math.round((stats.successRate || 0) * 100);
-                document.getElementById('stat-success').textContent = successRate + '%';
-            }
-        });
-
-        api.onAgentStopped(() => {
-            btnStart.disabled = false;
-            btnStop.disabled = true;
-            goalInput.disabled = false;
-            document.getElementById('stats-container').classList.remove('loading');
-            addLog('✅ Agent stopped.', null, 'system');
-        });
-
-        // Handle agent questions
-        api.onAgentQuestion((questionData) => {
-            const activeTab = tabManager.getActiveTab();
-            if (activeTab) {
-                showQuestionDialog(questionData, activeTab.id);
-            }
-        });
-
-        // Handle chat messages
-        api.onChatMessage((messageData) => {
-            const activeTab = tabManager.getActiveTab();
-            if (activeTab) {
-                addLog(messageData.message, activeTab.id, messageData.sender === 'user' ? 'user' : 'agent');
-            }
-        });
-
-        // Handle tab switch
-        ipcRenderer.on('tab-switched', (event, tabId) => {
-            currentTabDisplay.textContent = tabId;
-            const tab = tabManager.tabs.get(tabId);
-            if (tab) {
-                urlInput.value = tab.url;
-            }
-        });
-
-        // --- Question Dialog Logic ---
-        const questionOverlay = document.getElementById('question-overlay');
-        const questionText = document.getElementById('question-text');
-        const questionOptions = document.getElementById('question-options');
-        const customAnswerInput = document.getElementById('custom-answer');
-        const btnCustomAnswer = document.getElementById('btn-custom-answer');
-        let currentQuestionTabId = null;
-
-        function showQuestionDialog(questionData, tabId) {
-            currentQuestionTabId = tabId;
-            questionText.textContent = questionData.question;
-            questionOptions.innerHTML = '';
-
-            if (questionData.options && questionData.options.length > 0) {
-                questionData.options.forEach((option, index) => {
-                    const btn = document.createElement('button');
-                    btn.className = 'question-option';
-                    btn.textContent = option;
+                // Mode switching
+                this.elements.modeBtns.forEach(btn => {
                     btn.addEventListener('click', () => {
-                        sendQuestionResponse(option, tabId);
+                        this.setMode(btn.dataset.mode);
                     });
-                    questionOptions.appendChild(btn);
+                });
+
+                // Start/Stop buttons
+                this.elements.btnStart.addEventListener('click', () => this.startAgent());
+                this.elements.btnStop.addEventListener('click', () => this.stopAgent());
+
+                // Keyboard shortcuts
+                this.elements.goalInput.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey && e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!this.elements.btnStart.disabled) {
+                            this.startAgent();
+                        }
+                    }
+                });
+
+                // Chat input
+                this.elements.btnSend.addEventListener('click', () => this.sendChat());
+                this.elements.chatInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendChat();
+                });
+
+                // URL navigation
+                this.elements.urlInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.navigateTo(this.elements.urlInput.value);
+                    }
                 });
             }
 
-            questionOverlay.classList.add('active');
-            customAnswerInput.value = '';
-            customAnswerInput.focus();
-        }
-
-        function hideQuestionDialog() {
-            questionOverlay.classList.remove('active');
-            currentQuestionTabId = null;
-        }
-
-        function sendQuestionResponse(response, tabId) {
-            hideQuestionDialog();
-            api.sendChatMessage(response, tabId);
-            addLog(response, tabId, 'user');
-        }
-
-        btnCustomAnswer.addEventListener('click', () => {
-            const response = customAnswerInput.value.trim();
-            if (response && currentQuestionTabId) {
-                sendQuestionResponse(response, currentQuestionTabId);
+            setupModeSwitcher() {
+                // Mode is already handled by click listeners
             }
-        });
 
-        customAnswerInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const response = customAnswerInput.value.trim();
-                if (response && currentQuestionTabId) {
-                    sendQuestionResponse(response, currentQuestionTabId);
+            setMode(mode) {
+                this.state.mode = mode;
+                
+                // Update button states
+                this.elements.modeBtns.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.mode === mode);
+                    btn.setAttribute('aria-selected', btn.dataset.mode === mode);
+                });
+
+                // Show/hide advanced panel
+                this.elements.advancedPanel.classList.toggle('visible', mode === 'advanced');
+
+                // Log mode change
+                this.addLogEntry('system', 'BrowserAgent', `Switched to ${mode} mode`);
+            }
+
+            setupWelcomeExamples() {
+                document.querySelectorAll('.welcome-example').forEach(example => {
+                    example.addEventListener('click', () => {
+                        const goal = example.dataset.goal;
+                        this.elements.goalInput.value = goal;
+                        this.startAgent();
+                    });
+                });
+            }
+
+            startAgent() {
+                const goal = this.elements.goalInput.value.trim();
+                if (!goal) {
+                    this.addLogEntry('system', 'BrowserAgent', 'Please enter a goal first');
+                    return;
+                }
+
+                this.state.isRunning = true;
+                this.state.startTime = Date.now();
+
+                // Update UI
+                this.elements.btnStart.disabled = true;
+                this.elements.btnStop.disabled = false;
+                this.elements.goalInput.disabled = true;
+                this.elements.statusIndicator.classList.add('active');
+                this.elements.statusIndicator.querySelector('span:last-child').textContent = 'Running';
+                this.elements.progressFill.classList.add('animating');
+
+                // Hide welcome screen
+                this.elements.welcomeScreen.style.display = 'none';
+
+                // Start timer
+                this.state.timerInterval = setInterval(() => this.updateTimer(), 1000);
+
+                // Log start
+                this.addLogEntry('user', 'You', goal);
+                this.addLogEntry('agent', 'BrowserAgent', 'Starting automation...');
+
+                // TODO: Connect to actual agent
+                if (window.electronAPI) {
+                    window.electronAPI.startAgent(goal);
                 }
             }
-        });
 
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            // Escape - close dialog or stop agent
-            if (e.key === 'Escape') {
-                if (questionOverlay.classList.contains('active')) {
-                    hideQuestionDialog();
-                } else if (!btnStop.disabled) {
-                    btnStop.click();
+            stopAgent() {
+                this.state.isRunning = false;
+
+                // Update UI
+                this.elements.btnStart.disabled = false;
+                this.elements.btnStop.disabled = true;
+                this.elements.goalInput.disabled = false;
+                this.elements.statusIndicator.classList.remove('active');
+                this.elements.statusIndicator.querySelector('span:last-child').textContent = 'Ready';
+                this.elements.progressFill.classList.remove('animating');
+                this.elements.progressFill.style.width = '0%';
+
+                // Stop timer
+                clearInterval(this.state.timerInterval);
+
+                // Log stop
+                this.addLogEntry('agent', 'BrowserAgent', 'Automation stopped');
+
+                // TODO: Connect to actual agent
+                if (window.electronAPI) {
+                    window.electronAPI.stopAgent();
                 }
             }
-            // Ctrl+Enter - start agent
-            if (e.ctrlKey && e.key === 'Enter' && !btnStart.disabled) {
-                btnStart.click();
+
+            updateTimer() {
+                if (!this.state.startTime) return;
+                
+                const elapsed = Math.floor((Date.now() - this.state.startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const seconds = (elapsed % 60).toString().padStart(2, '0');
+                this.elements.statTime.textContent = `${minutes}:${seconds}`;
             }
-            // Ctrl+T - new tab
-            if (e.ctrlKey && e.key === 't') {
-                e.preventDefault();
-                tabManager.createTab();
-            }
-            // Ctrl+W - close current tab
-            if (e.ctrlKey && e.key === 'w') {
-                e.preventDefault();
-                const activeTab = tabManager.getActiveTab();
-                if (activeTab && tabManager.tabs.size > 1) {
-                    tabManager.closeTab(activeTab.id);
+
+            sendChat() {
+                const message = this.elements.chatInput.value.trim();
+                if (!message) return;
+
+                this.addLogEntry('user', 'You', message);
+                this.elements.chatInput.value = '';
+
+                // TODO: Send to agent
+                if (window.electronAPI) {
+                    window.electronAPI.sendChatMessage(message);
                 }
             }
-        });
 
-        // Request session stats periodically
-        setInterval(async () => {
-            const activeTab = tabManager.getActiveTab();
-            if (activeTab) {
-                const stats = await api.getSessionStats();
-                if (stats) {
-                    const successRate = Math.round((stats.successRate || 0) * 100);
-                    document.getElementById('stat-success').textContent = successRate + '%';
-                }
+            addLogEntry(type, author, message) {
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                
+                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                entry.innerHTML = `
+                    <div class="log-header">
+                        <div class="log-avatar ${type}">${type === 'user' ? '👤' : type === 'agent' ? '🤖' : '🤖'}</div>
+                        <span class="log-author">${author}</span>
+                        <span class="log-time">${time}</span>
+                    </div>
+                    <div class="log-message">${message}</div>
+                `;
+
+                this.elements.activityLog.appendChild(entry);
+                this.elements.activityLog.scrollTop = this.elements.activityLog.scrollHeight;
             }
-        }, 5000);
 
-        // Initial tab info update
-        const initialTab = tabManager.getActiveTab();
-        if (initialTab) {
-            currentTabDisplay.textContent = initialTab.id;
+            navigateTo(url) {
+                // TODO: Connect to tab manager
+                console.log('Navigating to:', url);
+            }
+
+            showDialog(title, text, options = []) {
+                document.getElementById('dialogTitle').textContent = title;
+                document.getElementById('dialogText').textContent = text;
+                
+                const optionsContainer = document.getElementById('dialogOptions');
+                optionsContainer.innerHTML = '';
+                
+                options.forEach(option => {
+                    const btn = document.createElement('button');
+                    btn.className = 'dialog-option';
+                    btn.textContent = option;
+                    btn.addEventListener('click', () => {
+                        this.hideDialog();
+                        // TODO: Send response
+                    });
+                    optionsContainer.appendChild(btn);
+                });
+
+                this.elements.dialogOverlay.classList.add('active');
+            }
+
+            hideDialog() {
+                this.elements.dialogOverlay.classList.remove('active');
+            }
         }
 
+        // Initialize UI
+        const ui = new UIController();
+
+        // Expose for Electron API
+        window.uiController = ui;
     </script>
 </body>
-
 </html>

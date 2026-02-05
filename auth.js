@@ -1,4 +1,13 @@
-const keytar = require('keytar');
+// Handle optional dependency
+let keytar;
+try {
+    keytar = require('keytar');
+} catch (error) {
+    console.warn('[Auth] keytar not installed. Secure credential storage will use fallback.');
+    console.warn('[Auth] Install with: npm install keytar');
+    keytar = null;
+}
+
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -7,11 +16,21 @@ const SERVICE_NAME = 'agentic-browser';
 const ACCOUNT_NAME = 'database-encryption';
 const SALT_FILE = path.join(__dirname, '.salt');
 
+// In-memory fallback storage when keytar is not available
+const fallbackStorage = new Map();
+
 class AuthManager {
     constructor() {
         this.isAuthenticated = false;
         this.derivedKey = null;
         this.salt = null;
+    }
+
+    /**
+     * Check if secure credential storage is available
+     */
+    static isSecureStorageAvailable() {
+        return keytar !== null;
     }
 
     /**
@@ -46,8 +65,13 @@ class AuthManager {
 
     async isPasswordSet() {
         try {
-            const passwordHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
-            return passwordHash !== null;
+            if (keytar) {
+                const passwordHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+                return passwordHash !== null;
+            } else {
+                // Fallback: check in-memory storage
+                return fallbackStorage.has(`${SERVICE_NAME}:${ACCOUNT_NAME}`);
+            }
         } catch (error) {
             console.error('[Auth] Error checking password:', error.message);
             return false;
@@ -64,8 +88,13 @@ class AuthManager {
             // Hash the password for storage (separate from encryption key)
             const passwordHash = this.hashPassword(password);
 
-            // Store hash in system keychain (NOT the plain password)
-            await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, passwordHash);
+            // Store hash in system keychain or fallback storage
+            if (keytar) {
+                await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, passwordHash);
+            } else {
+                fallbackStorage.set(`${SERVICE_NAME}:${ACCOUNT_NAME}`, passwordHash);
+                console.warn('[Auth] Using fallback storage (keytar not available)');
+            }
 
             this.derivedKey = this.deriveKey(password);
             this.isAuthenticated = true;
@@ -84,7 +113,13 @@ class AuthManager {
      */
     async autoLogin() {
         try {
-            const storedHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+            let storedHash;
+            if (keytar) {
+                storedHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+            } else {
+                storedHash = fallbackStorage.get(`${SERVICE_NAME}:${ACCOUNT_NAME}`);
+            }
+            
             if (!storedHash) {
                 return { success: false, error: 'No credentials stored' };
             }
@@ -125,7 +160,12 @@ class AuthManager {
 
     async verifyPassword(password) {
         try {
-            const storedHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+            let storedHash;
+            if (keytar) {
+                storedHash = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
+            } else {
+                storedHash = fallbackStorage.get(`${SERVICE_NAME}:${ACCOUNT_NAME}`);
+            }
 
             if (!storedHash) {
                 return { success: false, error: 'No password set' };
@@ -158,7 +198,11 @@ class AuthManager {
                 if (password === storedHash) {
                     console.log('[Auth] Migrating from plaintext to hashed password');
                     // Upgrade to hashed format
-                    await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, inputHash);
+                    if (keytar) {
+                        await keytar.setPassword(SERVICE_NAME, ACCOUNT_NAME, inputHash);
+                    } else {
+                        fallbackStorage.set(`${SERVICE_NAME}:${ACCOUNT_NAME}`, inputHash);
+                    }
                     this.derivedKey = this.deriveKey(password);
                     this.isAuthenticated = true;
                     return { success: true, derivedKey: this.derivedKey };
@@ -200,7 +244,11 @@ class AuthManager {
 
     async resetPassword() {
         try {
-            await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
+            if (keytar) {
+                await keytar.deletePassword(SERVICE_NAME, ACCOUNT_NAME);
+            } else {
+                fallbackStorage.delete(`${SERVICE_NAME}:${ACCOUNT_NAME}`);
+            }
             // Also remove salt to start fresh
             if (fs.existsSync(SALT_FILE)) {
                 fs.unlinkSync(SALT_FILE);

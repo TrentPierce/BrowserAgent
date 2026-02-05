@@ -1,9 +1,28 @@
+/**
+ * BrowserAgent - Intelligent Browser Automation
+ * Electron Main Process
+ * 
+ * This project uses BrowserAgent by Trent Pierce
+ * https://github.com/TrentPierce/BrowserAgent
+ * Licensed under the BrowserAgent Non-Commercial License
+ * 
+ * Copyright (c) 2026 Trent Pierce. All rights reserved.
+ * See LICENSE file for full terms.
+ */
+
 require('dotenv').config();
 const { app, BrowserWindow, ipcMain, webContents, dialog } = require('electron');
 const path = require('path');
 
-// Import new components
-const SecureDatabase = require('./database');
+// Import new components - handle optional dependencies
+let SecureDatabase;
+try {
+    SecureDatabase = require('./database');
+} catch (error) {
+    console.warn('[Main] Database module not available:', error.message);
+    SecureDatabase = null;
+}
+
 const AuthManager = require('./auth');
 const ContextManager = require('./contextManager');
 const LearningEngine = require('./learningEngine');
@@ -17,8 +36,29 @@ let contextManager = null;
 let learningEngine = null;
 let isAuthenticated = false;
 let isInitializing = true;
+let databaseAvailable = SecureDatabase !== null;
 
 async function initializeApp() {
+    // Check if database is available
+    if (!databaseAvailable) {
+        console.warn('[Main] Running without database support. Some features will be unavailable.');
+        dialog.showMessageBox({
+            type: 'warning',
+            title: 'Limited Mode',
+            message: 'Database not available',
+            detail: 'Running in limited mode without persistent storage. Install better-sqlite3 for full functionality.'
+        });
+        
+        // Initialize without database
+        authManager = new AuthManager();
+        contextManager = new ContextManager();
+        learningEngine = new LearningEngine();
+        isAuthenticated = true;
+        isInitializing = false;
+        createWindow();
+        return;
+    }
+
     // Initialize authentication
     authManager = new AuthManager();
 
@@ -80,6 +120,13 @@ async function initializeApp() {
 }
 
 async function initializeDatabase(password) {
+    if (!SecureDatabase || !SecureDatabase.isAvailable || !SecureDatabase.isAvailable()) {
+        console.warn('[Main] Database not available, skipping initialization');
+        contextManager = new ContextManager();
+        learningEngine = new LearningEngine();
+        return;
+    }
+    
     database = new SecureDatabase();
     database.initialize(password);
     contextManager = new ContextManager(database);

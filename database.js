@@ -1,4 +1,13 @@
-const Database = require('better-sqlite3');
+// Handle optional dependency
+let Database;
+try {
+    Database = require('better-sqlite3');
+} catch (error) {
+    console.warn('[Database] better-sqlite3 not installed. Database features will be unavailable.');
+    console.warn('[Database] Install with: npm install better-sqlite3');
+    Database = null;
+}
+
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
@@ -10,6 +19,13 @@ class SecureDatabase {
         this.dbPath = dbPath || path.join(__dirname, 'agent_memory.db');
         this.db = null;
         this.encryptionKey = null;
+    }
+
+    /**
+     * Check if database is available
+     */
+    static isAvailable() {
+        return Database !== null;
     }
 
     /**
@@ -38,6 +54,10 @@ class SecureDatabase {
     }
 
     initialize(encryptionKey) {
+        if (!Database) {
+            throw new Error('better-sqlite3 is not installed. Install with: npm install better-sqlite3');
+        }
+
         if (!encryptionKey || encryptionKey.length < 8) {
             throw new Error('Encryption key must be at least 8 characters');
         }

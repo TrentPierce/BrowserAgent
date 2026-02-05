@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/TrentPierce/BrowserAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/TrentPierce/BrowserAgent/actions)
 [![npm version](https://badge.fury.io/js/@trentpierce%2Fbrowser-agent.svg)](https://www.npmjs.com/package/@trentpierce/browser-agent)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Non-Commercial](https://img.shields.io/badge/License-Non--Commercial-red.svg)](LICENSE)
 
 An enterprise-grade automation platform with multi-LLM support, visual understanding, temporal awareness, adaptive learning, **mobile automation (iOS/Android)**, **reinforcement learning**, and **Browserbase cloud integration**.
 
@@ -612,6 +612,34 @@ See `.github/workflows/` for details.
 **Security**: SOC 2 Ready  
 **Algorithms**: Q-Learning, Policy Gradient  
 **Documentation**: Complete  
+
+## License
+
+**BrowserAgent Non-Commercial License with Attribution**
+
+This project is licensed under a custom non-commercial license that requires attribution.
+
+### You CAN:
+- ✅ Use for personal projects
+- ✅ Use for educational purposes
+- ✅ Use in non-profit organizations
+- ✅ Create open-source derivatives
+- ✅ Contribute improvements back
+
+### You MUST:
+- 📢 Provide attribution to Trent Pierce in your source code, documentation, and user interfaces
+- 📋 Include the license file when distributing
+- 📝 State any changes you make
+
+### You CANNOT:
+- ❌ Use for commercial purposes without a separate license
+- ❌ Sell this software or derivatives
+- ❌ Use in business operations for profit
+- ❌ Remove attribution
+
+See [LICENSE](LICENSE) for full terms.
+
+**Commercial licensing available** - Contact Trent Pierce for commercial use inquiries.
 
 ---
 

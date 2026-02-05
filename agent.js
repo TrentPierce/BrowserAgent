@@ -35,6 +35,14 @@
  * - Learning/context features      → Edit enhancedAgent.js
  * 
  * ============================================================================
+ * 
+ * This project uses BrowserAgent by Trent Pierce
+ * https://github.com/TrentPierce/BrowserAgent
+ * Licensed under the BrowserAgent Non-Commercial License
+ * 
+ * Copyright (c) 2026 Trent Pierce. All rights reserved.
+ * See LICENSE file for full terms.
+ * ============================================================================
  */
 
 const { GoogleGenerativeAI } = require("@google/generative-ai");

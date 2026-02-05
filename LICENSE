@@ -1,0 +1,174 @@
+BrowserAgent Non-Commercial License with Attribution
+Version 1.0, February 2026
+
+Copyright (c) 2026 Trent Pierce
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. DEFINITIONS
+
+   "License" shall mean the terms and conditions for use, reproduction,
+   and distribution as defined by this document.
+
+   "Licensor" shall mean Trent Pierce, the copyright owner.
+
+   "You" (or "Your") shall mean an individual or Legal Entity
+   exercising permissions granted by this License.
+
+   "Source" form shall mean the preferred form for making modifications,
+   including but not limited to software source code, documentation
+   source, and configuration files.
+
+   "Object" form shall mean any form resulting from mechanical
+   transformation or translation of a Source form.
+
+   "Work" shall mean the work of authorship made available under this
+   License, including BrowserAgent and all associated files.
+
+   "Derivative Works" shall mean any work that is based on the Work.
+
+   "Commercial Use" means any use that is primarily intended for or
+directed toward commercial advantage or monetary compensation, including
+but not limited to:
+   a. Using the Work to provide services to third parties for a fee
+   b. Incorporating the Work into a commercial product or service
+   c. Using the Work in any business operations or workflows
+   d. Selling, licensing, or distributing the Work for profit
+   e. Using the Work to develop competing products or services
+
+2. GRANT OF RIGHTS
+
+   Subject to the terms and conditions of this License, Licensor hereby
+grants You a worldwide, royalty-free, non-exclusive license to:
+
+   a. Use the Work for non-commercial purposes only
+   b. Reproduce and distribute copies of the Work
+   c. Create Derivative Works for non-commercial purposes
+   d. Publicly display and perform the Work
+
+3. ATTRIBUTION REQUIREMENT
+
+   You MUST provide clear and visible attribution to Trent Pierce as the
+creator of BrowserAgent in all of the following situations:
+
+   a. IN SOURCE CODE: Include the following header in all source files:
+      ```
+      // This project uses BrowserAgent by Trent Pierce
+      // https://github.com/TrentPierce/BrowserAgent
+      // Licensed under the BrowserAgent Non-Commercial License
+      ```
+
+   b. IN DOCUMENTATION: Include attribution in your README and docs:
+      ```
+      ## Acknowledgments
+      This project uses [BrowserAgent](https://github.com/TrentPierce/BrowserAgent) 
+      by Trent Pierce, licensed under the BrowserAgent Non-Commercial License.
+      ```
+
+   c. IN USER INTERFACES: Display attribution in any UI that uses the Work:
+      - For web applications: Include in footer or about page
+      - For desktop applications: Include in about dialog
+      - For CLI tools: Display in help text or version output
+
+   d. IN ACADEMIC/PUBLISHED WORKS: Include citation:
+      ```
+      Pierce, T. (2026). BrowserAgent: AI-Powered Browser Automation. 
+      https://github.com/TrentPierce/BrowserAgent
+      ```
+
+   e. IN PUBLIC FORKS/DERIVATIVES: The README must prominently state:
+      ```
+      ## Based on BrowserAgent
+      This project is derived from BrowserAgent by Trent Pierce.
+      Original work: https://github.com/TrentPierce/BrowserAgent
+      ```
+
+4. COMMERCIAL USE PROHIBITION
+
+   You MAY NOT use the Work for any Commercial Use, including but not
+limited to:
+
+   a. Selling the Work or any Derivative Works
+   b. Using the Work in a business context for profit
+   c. Offering the Work as part of a paid service
+   d. Using the Work to develop competing commercial products
+   e. Incorporating the Work into proprietary software sold to customers
+
+5. PERMITTED USES
+
+   The following uses are explicitly permitted under this License:
+
+   a. Personal use and experimentation
+   b. Educational purposes (teaching, learning, academic research)
+   c. Non-profit organization use
+   d. Open source projects (with proper attribution)
+   e. Contributing improvements back to the original project
+   f. Creating tutorials and documentation about the Work
+
+6. DERIVATIVE WORKS
+
+   You may create and distribute Derivative Works under the following
+conditions:
+
+   a. The Derivative Work must also be licensed under this same License
+   b. You must clearly state what changes you made
+   c. You must retain all attribution notices
+   d. You must not add any additional restrictions
+
+7. DISTRIBUTION
+
+   When distributing the Work or Derivative Works:
+
+   a. You must include a copy of this License
+   b. You must preserve all copyright notices
+   c. You must document any changes you made
+   d. You must not misrepresent the origin of the Work
+
+8. PATENT RIGHTS
+
+   This License does not grant permission to use any trade names,
+trademarks, service marks, or product names of the Licensor. You may
+not use the Licensor's name for endorsement of Derivative Works without
+specific prior written permission.
+
+9. TERMINATION
+
+   This License automatically terminates if You violate any of its terms.
+Upon termination, You must immediately cease all use and distribution of
+the Work and destroy all copies in Your possession.
+
+10. NO WARRANTY
+
+    THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+11. LIMITATION OF LIABILITY
+
+    IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE WORK.
+
+12. ACCEPTANCE
+
+    By using, reproducing, or distributing the Work, You indicate Your
+acceptance of this License and all its terms and conditions.
+
+13. QUESTIONS OR COMMERCIAL LICENSING
+
+    For questions about this License or to inquire about commercial
+licensing options, please contact:
+
+    Trent Pierce
+    GitHub: https://github.com/TrentPierce
+
+---
+
+EXCEPTION FOR COMMERCIAL USE:
+
+If You wish to use this Work for commercial purposes, You must obtain
+a separate commercial license from the Licensor. Commercial licensing
+inquiries should be directed to the contact information above.
+
+This License is based on principles from the PolyForm Noncommercial
+License but is customized specifically for BrowserAgent.
