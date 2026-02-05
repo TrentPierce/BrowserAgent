@@ -363,7 +363,7 @@ class HumanBehaviorSimulator {
             amount: this.randomBetween(200, 500)
           });
           break;
-        case 'hover':
+        case 'hover': {
           // Get random clickable element
           const elements = await page.$$('a, button, [role="button"]');
           if (elements.length > 0) {
@@ -380,6 +380,7 @@ class HumanBehaviorSimulator {
             }
           }
           break;
+        }
         case 'click':
           // Random pause between actions
           await this.sleep(this.randomBetween(1000, 3000));

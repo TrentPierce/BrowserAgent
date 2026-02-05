@@ -354,7 +354,10 @@ class ContextManager {
   async withPopup(trigger, handler, options = {}) {
     const timeout = options.timeout || 10000;
         
-    return new Promise(async (resolve, reject) => {
+    // Execute trigger first
+    await trigger();
+        
+    return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error('Timeout waiting for popup'));
       }, timeout);
@@ -377,8 +380,6 @@ class ContextManager {
         setTimeout(checkForPopup, 100);
       };
 
-      // Execute trigger
-      await trigger();
       checkForPopup();
     });
   }

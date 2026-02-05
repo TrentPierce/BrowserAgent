@@ -557,6 +557,22 @@ class AutoWaiter {
   }
 
   /**
+     * Get typing delay with variance for human-like typing simulation
+     * @param {Object} options - Typing options
+     * @param {number} options.typingSpeed - Base typing speed in ms per character
+     * @param {number} options.typingVariance - Variance in typing speed
+     * @returns {number} Delay in milliseconds
+     */
+  getTypingDelay(options = {}) {
+    const typingSpeed = options.typingSpeed || 100;
+    const typingVariance = options.typingVariance || 50;
+        
+    // Calculate random delay within variance range
+    const variance = (Math.random() * 2 - 1) * typingVariance;
+    return Math.max(10, typingSpeed + variance);
+  }
+
+  /**
      * Utility sleep function
      * @private
      */

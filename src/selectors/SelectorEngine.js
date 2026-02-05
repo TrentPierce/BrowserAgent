@@ -363,7 +363,7 @@ class SelectorEngine {
               false
             );
             let node;
-            while (node = walker.nextNode()) {
+            while ((node = walker.nextNode())) {
               if (node.textContent.trim().includes(text)) {
                 return node.parentElement;
               }
@@ -380,11 +380,12 @@ class SelectorEngine {
           element = await page.$(`[aria-label="${selectorObj.value}"]`);
           return element;
                 
-        default:
+        default: {
           // CSS selector
           const cssSelector = this.buildCSS(selectorObj);
           element = await page.$(cssSelector);
           return element;
+        }
       }
     } catch (e) {
       return null;
