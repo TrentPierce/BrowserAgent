@@ -2,37 +2,55 @@
   "categories": [
     {
       "title": "## 🚀 Features",
-      "labels": ["feature", "enhancement"]
+      "labels": ["feature", "enhancement", "feat"]
     },
     {
       "title": "## 🐛 Bug Fixes",
-      "labels": ["bug", "fix"]
+      "labels": ["bug", "fix", "bugfix"]
     },
     {
       "title": "## 📚 Documentation",
       "labels": ["documentation", "docs"]
     },
     {
-      "title": "## 🧪 Testing",
-      "labels": ["test", "testing"]
-    },
-    {
       "title": "## 🔧 Maintenance",
-      "labels": ["maintenance", "chore", "dependencies"]
+      "labels": ["chore", "maintenance", "refactor"]
     },
     {
       "title": "## 🔒 Security",
       "labels": ["security"]
+    },
+    {
+      "title": "## ⚡ Performance",
+      "labels": ["performance", "perf"]
     }
   ],
   "ignore_labels": [
     "ignore",
     "wontfix",
-    "duplicate"
+    "duplicate",
+    "invalid"
   ],
   "sort": "ASC",
-  "template": "${{CHANGELOG}}\n\n**Full Changelog**: ${{RELEASE_DIFF}}",
-  "pr_template": "- ${{TITLE}} by @${{AUTHOR}} in #${{NUMBER}}",
+  "template": "#{{CHANGELOG}}\n\n**Full Changelog**: #{{RELEASE_DIFF}}\n",
+  "pr_template": "- #{{TITLE}} by @#{{AUTHOR}} in ##{{NUMBER}}",
   "empty_template": "No changes in this release",
-  "transformers": []
+  "label_extractor": [
+    {
+      "pattern": "^feat(\\(.+\\))?:",
+      "target": "feature"
+    },
+    {
+      "pattern": "^fix(\\(.+\\))?:",
+      "target": "bug"
+    },
+    {
+      "pattern": "^docs(\\(.+\\))?:",
+      "target": "documentation"
+    },
+    {
+      "pattern": "^chore(\\(.+\\))?:",
+      "target": "chore"
+    }
+  ]
 }
